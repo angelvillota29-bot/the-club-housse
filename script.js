@@ -6,6 +6,19 @@ let dishesData = [];
 let scheduleData = []; 
 let takeoutConfig = { enabled: false, fee: 0, soupSizeFees: { Normal: 0, Grande: 0 } };
 let mealTimesConfig = { Desayuno: { start: "06:00", end: "11:00" }, Almuerzo: { start: "11:00", end: "16:00" }, Cena: { start: "16:00", end: "22:00" } };
+// 'manual' = el dueño prende/apaga con un switch · 'horario' = se calcula
+// solo contra la hora actual, todos los días igual (soporta cruzar medianoche,
+// ej. 18:00 a 00:00 -- "end" menor o igual a "start" se toma como "hasta el
+// día siguiente").
+let businessOpenConfig = { mode: 'manual', abiertoManual: true, horario: { start: "18:00", end: "00:00" } };
+function estaAbiertoAhora(cfg) {
+  const c = cfg || businessOpenConfig;
+  if (c.mode !== 'horario') return c.abiertoManual !== false;
+  const { start, end } = c.horario || {};
+  if (!start || !end) return true;
+  const now = new Date().toTimeString().slice(0, 5);
+  return start <= end ? (now >= start && now < end) : (now >= start || now < end);
+}
 let deliveryZoneConfig = { enabled: false, address: '', carreraFrom: '', carreraTo: '', calleFrom: '', calleTo: '' };
 let brandingConfig = {};
 let usersData = [];
@@ -96,6 +109,8 @@ async function loadAllData() {
     takeoutConfig = ensureObject(data.takeoutConfig, { enabled: false, fee: 0, soupSizeFees: { Normal: 0, Grande: 0 } });
     takeoutConfig.soupSizeFees = ensureObject(takeoutConfig.soupSizeFees, { Normal: 0, Grande: 0 });
     mealTimesConfig = ensureObject(data.mealTimesConfig, { Desayuno: { start: "06:00", end: "11:00" }, Almuerzo: { start: "11:00", end: "16:00" }, Cena: { start: "16:00", end: "22:00" } });
+    businessOpenConfig = ensureObject(data.businessOpenConfig, { mode: 'manual', abiertoManual: true, horario: { start: "18:00", end: "00:00" } });
+    businessOpenConfig.horario = ensureObject(businessOpenConfig.horario, { start: "18:00", end: "00:00" });
     deliveryZoneConfig = ensureObject(data.deliveryZoneConfig, { enabled: false, address: '', carreraFrom: '', carreraTo: '', calleFrom: '', calleTo: '' });
     brandingConfig = ensureObject(data.brandingConfig, {});
     usersData = data.usersData || [];
@@ -115,7 +130,7 @@ async function loadAllData() {
 }
 
 async function saveAllData() {
-  const payload = { categories: categoriesData, dishes: dishesData, schedule: scheduleData, menuMode, singleMenuSchedule, takeoutConfig, mealTimesConfig, deliveryZoneConfig, brandingConfig, usersData, n8nConfig, ordersData, notifyConfig };
+  const payload = { categories: categoriesData, dishes: dishesData, schedule: scheduleData, menuMode, singleMenuSchedule, takeoutConfig, mealTimesConfig, businessOpenConfig, deliveryZoneConfig, brandingConfig, usersData, n8nConfig, ordersData, notifyConfig };
   try {
     const response = await fetch('api/save-data.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const result = await response.json();
@@ -275,7 +290,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function showSection(id) { showWelcomeSection(); document.getElementById('welcome-section').classList.add('hidden'); document.getElementById(id).classList.remove('hidden'); }
 
   document.getElementById('nav-categories-btn').addEventListener('click', () => { showSection('section-categories'); renderCategoriesSection(); });
-  document.getElementById('nav-mealtimes-btn').addEventListener('click', () => { showSection('section-mealtimes'); loadMealTimesFields(); loadDeliveryZoneFields(); });
+  document.getElementById('nav-mealtimes-btn').addEventListener('click', () => { showSection('section-mealtimes'); loadOpenStatusFields(); loadMealTimesFields(); loadDeliveryZoneFields(); });
   document.getElementById('nav-customize-btn').addEventListener('click', () => { showSection('section-customize'); loadCustomizeFields(); });
   document.getElementById('nav-new-dish-btn').addEventListener('click', () => { showSection('section-dishes'); renderDishesSection(); });
   document.getElementById('nav-schedule-btn').addEventListener('click', () => { showSection('section-schedule'); renderScheduleMatrixSection(); loadTakeoutFields(); });
@@ -440,6 +455,34 @@ document.addEventListener('DOMContentLoaded', async () => {
       </div>
     </div>`);
   }
+
+  function loadOpenStatusFields() {
+    document.getElementById('open-status-mode').value = businessOpenConfig.mode || 'manual';
+    document.getElementById('open-status-manual-checkbox').checked = businessOpenConfig.abiertoManual !== false;
+    document.getElementById('open-status-start').value = businessOpenConfig.horario?.start || '18:00';
+    document.getElementById('open-status-end').value = businessOpenConfig.horario?.end || '00:00';
+    toggleOpenStatusMode();
+  }
+  function toggleOpenStatusMode() {
+    const esHorario = document.getElementById('open-status-mode').value === 'horario';
+    document.getElementById('open-status-manual-wrap').classList.toggle('hidden', esHorario);
+    document.getElementById('open-status-horario-wrap').classList.toggle('hidden', !esHorario);
+  }
+  document.getElementById('open-status-mode').addEventListener('change', toggleOpenStatusMode);
+  document.getElementById('open-status-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    businessOpenConfig = {
+      mode: document.getElementById('open-status-mode').value,
+      abiertoManual: document.getElementById('open-status-manual-checkbox').checked,
+      horario: {
+        start: document.getElementById('open-status-start').value || '18:00',
+        end: document.getElementById('open-status-end').value || '00:00',
+      },
+    };
+    await saveAllData();
+    renderPublicMenu();
+    alert("Estado guardado");
+  });
 
   function loadMealTimesFields() {
     document.getElementById('mealtime-desayuno-start').value = mealTimesConfig.Desayuno?.start || '06:00';
@@ -949,6 +992,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const items = esUnico ? singleMenuSchedule : scheduleData.filter(s => s.day === day);
     list.innerHTML = esHoy ? '' : `<p class="day-notice">📅 Estás viendo el menú de <strong>${day}</strong> — solo puedes pedir del día de hoy (<strong>${nombreDiaHoy()}</strong>). Cambia el día arriba para poder agregar al pedido.</p>`;
 
+    const negocioAbierto = estaAbiertoAhora();
+    const closedBanner = document.getElementById('closed-banner');
+    if (!negocioAbierto) {
+      const horarioTxt = businessOpenConfig.mode === 'horario' ? ` Abrimos de ${businessOpenConfig.horario.start} a ${businessOpenConfig.horario.end}.` : '';
+      closedBanner.textContent = `🔴 Estamos cerrados ahora mismo.${horarioTxt} Puedes ver el menú, pero no se pueden hacer pedidos.`;
+      closedBanner.classList.remove('hidden');
+    } else closedBanner.classList.add('hidden');
+
     if (takeoutConfig.enabled) {
       document.getElementById('takeout-public-container').classList.remove('hidden');
       document.getElementById('takeout-fee-display').textContent = `+${formatCurrency(takeoutConfig.fee)}`;
@@ -984,7 +1035,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           html += `<div class="menu-item ${isSoldOut ? 'sold-out' : ''}">
             <div class="item-info">${imageHtml}<div class="item-info-text"><h3>${dish.name} ${stockBadge}</h3>${dish.desc ? `<p>${dish.desc}</p>` : ''}${soupTag}</div></div>
             <div class="price-container"><span class="price">${price}</span>${(isPublicTakeoutActive && !cat.exentoEmpaque) ? '<span class="takeout-badge">Incluye empaque</span>' : ''}
-              ${(!isSoldOut && esHoy) ? `<button type="button" class="btn-add-cart" onclick="addToCart(${dish.id})">+ Agregar</button>` : ''}
+              ${(!isSoldOut && esHoy && negocioAbierto) ? `<button type="button" class="btn-add-cart" onclick="addToCart(${dish.id})">+ Agregar</button>` : ''}
             </div>
           </div>`;
         });
@@ -1223,6 +1274,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('checkout-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (!estaAbiertoAhora()) { alert("Estamos cerrados ahora mismo, no se pueden hacer pedidos."); return; }
     const day = document.getElementById('public-day-select').value;
     const mealTime = document.getElementById('public-mealtime-select').value;
     const payload = {

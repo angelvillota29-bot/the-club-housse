@@ -81,6 +81,23 @@ $hoyFecha = date('Y-m-d');
 $schedule = $menuMode === 'unico' ? ($data['singleMenuSchedule'] ?? []) : ($data['schedule'] ?? []);
 reiniciarStockDiario($schedule, $hoyFecha);
 
+// ── Abierto/Cerrado: nunca confiar en lo que mande el navegador o el bot --
+// se recalcula aquí con la hora del SERVIDOR contra la config guardada.
+function estaAbiertoAhora(array $cfg): bool {
+    if (($cfg['mode'] ?? 'manual') !== 'horario') return ($cfg['abiertoManual'] ?? true) !== false;
+    $start = $cfg['horario']['start'] ?? null;
+    $end = $cfg['horario']['end'] ?? null;
+    if (!$start || !$end) return true;
+    $now = date('H:i');
+    return $start <= $end ? ($now >= $start && $now < $end) : ($now >= $start || $now < $end);
+}
+$businessOpenConfig = $data['businessOpenConfig'] ?? ['mode' => 'manual', 'abiertoManual' => true];
+if (!estaAbiertoAhora($businessOpenConfig)) {
+    http_response_code(409);
+    echo json_encode(['success' => false, 'error' => 'Estamos cerrados ahora mismo, no se pueden hacer pedidos.']);
+    exit;
+}
+
 // Recalcula el mismo cargo de "para llevar" (empaque del plato + tamaño para
 // sopas) que se muestra en la página -- nunca se confía en el precio que
 // mande el navegador, todo pedido de la página es para llevar/domicilio.

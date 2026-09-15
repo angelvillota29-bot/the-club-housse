@@ -81,6 +81,7 @@
         </div>
       </div>
     </div>
+    <div id="closed-banner" class="closed-banner hidden"></div>
     <div id="public-menu-list"></div>
   </main>
 
@@ -184,6 +185,27 @@
       </div>
 
       <div id="section-mealtimes" class="admin-sub-section hidden">
+        <section class="admin-card">
+          <h2>Abierto / Cerrado</h2>
+          <p class="text-muted">Controla cuándo se pueden hacer pedidos. En modo "Manual" tú prendes/apagas. En modo "Por horario" se abre y cierra solo, todos los días, entre las horas que pongas (si cierras después de medianoche, ej. 6pm a 12am, ponlo tal cual — el sistema entiende que cruza la medianoche).</p>
+          <form id="open-status-form">
+            <div class="input-group">
+              <label>Modo</label>
+              <select id="open-status-mode">
+                <option value="manual">Manual (yo lo prendo/apago)</option>
+                <option value="horario">Por horario (automático)</option>
+              </select>
+            </div>
+            <div id="open-status-manual-wrap" class="input-group">
+              <label class="checkbox-label"><input type="checkbox" id="open-status-manual-checkbox"> Abierto ahora mismo</label>
+            </div>
+            <div id="open-status-horario-wrap" class="form-row hidden">
+              <div class="input-group"><label>Abre</label><input type="time" id="open-status-start"></div>
+              <div class="input-group"><label>Cierra</label><input type="time" id="open-status-end"></div>
+            </div>
+            <button class="btn-primary-sm">Guardar</button>
+          </form>
+        </section>
         <section class="admin-card">
           <h2>Franjas Horarias (Desayuno / Almuerzo / Cena)</h2>
           <p class="text-muted">Define el rango de horas de cada comida. El menú público detecta la hora actual del cliente y le muestra automáticamente la comida que corresponde (el cliente puede cambiarla manualmente igual).</p>

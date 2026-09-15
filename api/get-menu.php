@@ -35,6 +35,16 @@ $categories = $data['categories'] ?? [];
 $takeoutConfig = $data['takeoutConfig'] ?? ['enabled' => false, 'fee' => 0, 'soupSizeFees' => ['Normal' => 0, 'Grande' => 0]];
 $mealTimesConfig = $data['mealTimesConfig'] ?? [];
 $deliveryZoneConfig = $data['deliveryZoneConfig'] ?? ['enabled' => false, 'address' => '', 'carreraFrom' => '', 'carreraTo' => '', 'calleFrom' => '', 'calleTo' => ''];
+$businessOpenConfig = $data['businessOpenConfig'] ?? ['mode' => 'manual', 'abiertoManual' => true];
+function estaAbiertoAhora(array $cfg): bool {
+    if (($cfg['mode'] ?? 'manual') !== 'horario') return ($cfg['abiertoManual'] ?? true) !== false;
+    $start = $cfg['horario']['start'] ?? null;
+    $end = $cfg['horario']['end'] ?? null;
+    if (!$start || !$end) return true;
+    $now = date('H:i');
+    return $start <= $end ? ($now >= $start && $now < $end) : ($now >= $start || $now < $end);
+}
+$negocioAbierto = estaAbiertoAhora($businessOpenConfig);
 // 'semanal' (horario por día, el de siempre) o 'unico' (mismo menú todos los
 // días -- vive en singleMenuSchedule, aparte, sin borrar el horario semanal).
 $menuMode = ($data['menuMode'] ?? 'semanal') === 'unico' ? 'unico' : 'semanal';
@@ -206,6 +216,8 @@ echo json_encode([
     'success' => true,
     'appliedFilters' => ['mealTime' => $resolvedMealTime, 'day' => $resolvedDay],
     'menuMode' => $menuMode,
+    'abierto' => $negocioAbierto,
+    'businessOpenConfig' => $businessOpenConfig,
     'takeoutConfig' => $takeoutConfig,
     'deliveryZoneConfig' => $deliveryZoneConfig,
     'menuByDay' => $menuByDay,
