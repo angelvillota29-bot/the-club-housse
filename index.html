@@ -110,6 +110,12 @@
         <div class="input-group"><label>Dirección de entrega</label><input type="text" id="checkout-direccion" required></div>
         <div class="input-group"><label>Teléfono</label><input type="tel" id="checkout-telefono" required></div>
         <div class="input-group"><label>Nota (opcional)</label><input type="text" id="checkout-nota" placeholder="Ej. llamar al llegar"></div>
+        <div class="input-group"><label>Método de pago</label>
+          <select id="checkout-metodo-pago" required>
+            <option value="efectivo">Efectivo</option>
+            <option value="nequi">Nequi</option>
+          </select>
+        </div>
         <p id="checkout-error-msg" class="error-msg"></p>
         <button type="submit" class="btn-primary">Enviar pedido</button>
       </form>

@@ -1285,6 +1285,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         telefono: document.getElementById('checkout-telefono').value.trim(),
         nota: document.getElementById('checkout-nota').value.trim()
       },
+      canal: 'pagina',
+      metodoPago: document.getElementById('checkout-metodo-pago').value,
       menuMode,
       items: cartData.map(i => ({ dishId: i.dishId, cantidad: i.cantidad, tipo: i.tipo, parentKey: i.parentKey, key: i.key, esDefault: !!i.esDefault, tamano: i.tamano || null, sourceDefaultDishId: i.sourceDefaultDishId || null }))
     };

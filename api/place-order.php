@@ -28,6 +28,10 @@ $day = $input['day'] ?? null;
 $mealTime = $input['mealTime'] ?? null;
 $cliente = $input['cliente'] ?? [];
 $items = $input['items'] ?? [];
+// 'pagina' = pedido hecho en el sitio (checkout del carrito); el bot manda
+// 'whatsapp' o 'telegram' según el canal real de la conversación.
+$canal = in_array($input['canal'] ?? '', ['pagina', 'whatsapp', 'telegram'], true) ? $input['canal'] : 'pagina';
+$metodoPago = ($input['metodoPago'] ?? '') === 'nequi' ? 'nequi' : 'efectivo';
 
 $nombre = trim($cliente['nombre'] ?? '');
 $direccion = trim($cliente['direccion'] ?? '');
@@ -211,6 +215,7 @@ if ($menuMode === 'unico') $data['singleMenuSchedule'] = $schedule;
 else $data['schedule'] = $schedule;
 
 if (!isset($data['ordersData']) || !is_array($data['ordersData'])) $data['ordersData'] = [];
+if (!isset($data['historialPedidos']) || !is_array($data['historialPedidos'])) $data['historialPedidos'] = [];
 $orderId = (int) round(microtime(true) * 1000);
 $order = [
     'id' => $orderId,
@@ -223,8 +228,14 @@ $order = [
     }, $resueltos),
     'total' => $total,
     'estado' => 'pendiente',
+    'canal' => $canal,
+    'metodoPago' => $metodoPago,
 ];
 $data['ordersData'][] = $order;
+// Registro PERMANENTE: a diferencia de ordersData (la cola de cocina, que se
+// vacía al eliminar el ticket), este nunca se borra desde el Receptor de
+// Pedidos -- es el historial de ventas para el panel de admin.
+$data['historialPedidos'][] = $order;
 
 if (file_put_contents($file, json_encode($data)) === false) {
     http_response_code(500);
