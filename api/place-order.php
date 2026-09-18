@@ -28,9 +28,9 @@ $day = $input['day'] ?? null;
 $mealTime = $input['mealTime'] ?? null;
 $cliente = $input['cliente'] ?? [];
 $items = $input['items'] ?? [];
-// 'pagina' = pedido hecho en el sitio (checkout del carrito); el bot manda
-// 'whatsapp' o 'telegram' según el canal real de la conversación.
-$canal = in_array($input['canal'] ?? '', ['pagina', 'whatsapp', 'telegram'], true) ? $input['canal'] : 'pagina';
+// 'pagina' = checkout directo del carrito; 'chat_web' = el bot desde el
+// widget del propio sitio; 'whatsapp'/'telegram' = el bot por esos canales.
+$canal = in_array($input['canal'] ?? '', ['pagina', 'chat_web', 'whatsapp', 'telegram'], true) ? $input['canal'] : 'pagina';
 $metodoPago = ($input['metodoPago'] ?? '') === 'nequi' ? 'nequi' : 'efectivo';
 
 $nombre = trim($cliente['nombre'] ?? '');
