@@ -1,3 +1,8 @@
+<!-- El navegador cachea script.js/styles.css sin revalidar (Apache no manda
+     Cache-Control) -- el "?v=" de sus <link>/<script> de abajo es lo único que
+     rompe esa caché en cada deploy. Súbelo (fecha de hoy) cada vez que
+     cambies script.js o styles.css, o clientes que ya visitaron el sitio
+     seguirán viendo la versión vieja hasta que hagan un refresh forzado. -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -7,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20260919">
 </head>
 <body>
   <div id="bg-overlay" class="bg-overlay"></div>
@@ -425,7 +430,7 @@
     </div>
   </div>
 
-  <script src="script.js"></script>
+  <script src="script.js?v=20260919"></script>
 
   <!-- Chat de IA (Forja) -- solo responde en este dominio, configurado en WEB_SITES del bot. -->
   <script src="https://forja-restaurante-ladelicia.angelvillota29.workers.dev/widget.js"
