@@ -1,6 +1,6 @@
 <?php
-// Menú completo (o filtrado por día/comida) para integraciones externas: el
-// bot de IA (Cloudflare Worker, member/tools.local.ts) y N8N. Requiere
+// Menú completo (o filtrado por día) para integraciones externas: el bot de
+// IA (Cloudflare Worker, member/tools.local.ts) y N8N. Requiere
 // Authorization: Bearer <API Key> que coincida con la API Key configurada
 // (variable de entorno N8N_API_KEY, o data.n8nConfig.apiKey como respaldo).
 header('Content-Type: application/json');
@@ -32,8 +32,7 @@ if (!$validKey || $providedKey !== $validKey) {
 
 $dishes = $data['dishes'] ?? [];
 $categories = $data['categories'] ?? [];
-$takeoutConfig = $data['takeoutConfig'] ?? ['enabled' => false, 'fee' => 0, 'soupSizeFees' => ['Normal' => 0, 'Grande' => 0]];
-$mealTimesConfig = $data['mealTimesConfig'] ?? [];
+$takeoutConfig = $data['takeoutConfig'] ?? ['enabled' => false, 'fee' => 0, 'domicilioFee' => 0];
 $deliveryZoneConfig = $data['deliveryZoneConfig'] ?? ['enabled' => false, 'address' => '', 'carreraFrom' => '', 'carreraTo' => '', 'calleFrom' => '', 'calleTo' => ''];
 $businessOpenConfig = $data['businessOpenConfig'] ?? ['mode' => 'manual', 'abiertoManual' => true];
 function estaAbiertoAhora(array $cfg): bool {
@@ -93,90 +92,12 @@ if ($menuMode === 'unico') {
     $resolvedDay = $dayParam;
 }
 
-// ── Resolver ?mealTime= ("now" = detecta Desayuno/Almuerzo/Cena según la
-// hora actual y mealTimesConfig, o un valor literal) ────────────────────
-$mealTimeParam = $_GET['mealTime'] ?? null;
-$resolvedMealTime = null;
-if ($mealTimeParam === 'now') {
-    $nowHm = date('H:i');
-    foreach ($mealTimesConfig as $nombreComida => $rango) {
-        $start = $rango['start'] ?? null;
-        $end = $rango['end'] ?? null;
-        if ($start && $end && $nowHm >= $start && $nowHm < $end) { $resolvedMealTime = $nombreComida; break; }
-    }
-    // Si ninguna franja calza con la hora actual, no se filtra por comida
-    // (mejor mostrar todo el día que devolver un menú vacío).
-} elseif ($mealTimeParam) {
-    $resolvedMealTime = $mealTimeParam;
-}
-
-function esCategoriaSopa($cat) {
-    if (!$cat) return false;
-    $role = $cat['role'] ?? '';
-    if ($role === 'sopa') return true;
-    if ($role === '' && stripos($cat['name'] ?? '', 'sopa') !== false) return true;
-    return false;
-}
-
-function cargoParaLlevarMenu($cat, $takeoutConfig, $isSoup) {
-    if (empty($takeoutConfig['enabled']) || !$cat || !empty($cat['exentoEmpaque'])) return null;
-    if ($isSoup) {
-        return [
-            'Normal' => (int) ($takeoutConfig['soupSizeFees']['Normal'] ?? 0),
-            'Grande' => (int) ($takeoutConfig['soupSizeFees']['Grande'] ?? 0),
-        ];
-    }
-    return (int) ($takeoutConfig['fee'] ?? 0);
-}
-
-// Con qué viene el plato -- se configura UNA vez por categoría (típicamente
-// "Proteína"), no plato por plato: el "seco" fijo (arroz, ensalada) más,
-// opcionalmente, un principio a elegir entre los disponibles ese día/modo.
-function incluyeDelPlato($cat, $dishesById, $principiosDisponibles) {
-    $incluye = [];
-    if (!empty($cat['incluyePrincipio']) && $principiosDisponibles) {
-        $incluye[] = [
-            'nombre' => 'Principio a elegir: ' . implode(', ', $principiosDisponibles),
-            'tipo' => 'principio',
-            'opcional' => !empty($cat['principioOpcional']),
-            'descuentoSiSeQuita' => (int) ($cat['principioDescuento'] ?? 0),
-        ];
-    }
-    foreach (($cat['defaultAccompaniments'] ?? []) as $def) {
-        $accDish = $dishesById[$def['dishId']] ?? null;
-        if (!$accDish) continue;
-        $incluye[] = [
-            'nombre' => $accDish['name'],
-            'tipo' => 'acompanamiento',
-            'opcional' => !empty($def['opcional']),
-            'descuentoSiSeQuita' => (int) ($def['descuento'] ?? 0),
-        ];
-    }
-    return $incluye;
-}
-
 // ── Días a incluir: solo el resuelto, o los 7 si no se pidió filtro (en
 // modo único siempre es solo el día actual, ya resuelto arriba). ────────
 $diasAIncluir = $resolvedDay ? [$resolvedDay] : $diasSemanaPhp;
 
 $menuByDay = [];
 foreach ($diasAIncluir as $dia) {
-    // Principios disponibles ESE día/modo (para describir el "a elegir" con
-    // nombres reales, y para que incluyeDelPlato() sepa si de verdad hay
-    // alguno disponible).
-    $principiosDisponibles = [];
-    foreach ($schedule as $s) {
-        if ($menuMode === 'semanal' && $s['day'] !== $dia) continue;
-        $d = $dishesById[$s['dishId']] ?? null;
-        if (!$d) continue;
-        $c = $categoriesById[$d['categoryId']] ?? null;
-        if (($c['role'] ?? '') !== 'principio') continue;
-        $available = $s['available'] ?? true;
-        $stock = array_key_exists('stock', $s) ? $s['stock'] : null;
-        if ($available === false || $stock === 0) continue;
-        $principiosDisponibles[] = $d['name'];
-    }
-
     $items = [];
     foreach ($schedule as $s) {
         // Modo único: una sola lista de platillos, sin día -- se repite
@@ -186,10 +107,7 @@ foreach ($diasAIncluir as $dia) {
         $dish = $dishesById[$s['dishId']] ?? null;
         if (!$dish) continue;
         $cat = $categoriesById[$dish['categoryId']] ?? null;
-        $catMealTime = $cat['mealTime'] ?? 'Almuerzo';
-        if ($resolvedMealTime && $catMealTime !== $resolvedMealTime) continue;
 
-        $isSoup = esCategoriaSopa($cat);
         $available = $s['available'] ?? true;
         $stock = array_key_exists('stock', $s) ? $s['stock'] : null;
         $items[] = [
@@ -198,15 +116,15 @@ foreach ($diasAIncluir as $dia) {
             'name' => $dish['name'],
             'description' => $dish['desc'] ?? '',
             'category' => $cat['name'] ?? '',
-            'mealTime' => $catMealTime,
             'deliveryEnabled' => $cat['deliveryEnabled'] ?? true,
             'price' => $dish['price'] ?? '$ 0',
             'available' => $available,
             'stock' => $stock,
             'isSoldOut' => ($available === false) || ($stock === 0),
-            'isSoupCategory' => $isSoup,
-            'takeoutExtraCost' => cargoParaLlevarMenu($cat, $takeoutConfig, $isSoup),
-            'incluye' => incluyeDelPlato($cat, $dishesById, $principiosDisponibles),
+            // Cargo de empaque de ESTE platillo (null si la categoría está
+            // exenta o el cobro está apagado) -- el de domicilio es UNA vez
+            // por pedido, no por platillo, y viaja aparte en takeoutConfig.
+            'empaqueFee' => (empty($takeoutConfig['enabled']) || !empty($cat['exentoEmpaque'])) ? null : (int) ($takeoutConfig['fee'] ?? 0),
         ];
     }
     $menuByDay[$dia] = $items;
@@ -214,7 +132,7 @@ foreach ($diasAIncluir as $dia) {
 
 echo json_encode([
     'success' => true,
-    'appliedFilters' => ['mealTime' => $resolvedMealTime, 'day' => $resolvedDay],
+    'appliedFilters' => ['day' => $resolvedDay],
     'menuMode' => $menuMode,
     'abierto' => $negocioAbierto,
     'businessOpenConfig' => $businessOpenConfig,

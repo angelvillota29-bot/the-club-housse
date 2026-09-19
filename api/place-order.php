@@ -1,10 +1,9 @@
 <?php
 // Recibe un pedido armado en la propia página (carrito + checkout), valida
-// disponibilidad/stock de CADA platillo (principal y acompañamientos) contra
-// el horario (semanal o menú único), descuenta el stock, guarda el pedido en
-// ordersData, y si hay notifyConfig configurado, avisa al dueño por correo
-// (Resend). No requiere API Key: lo llama el navegador del cliente, igual
-// que save-data.php.
+// disponibilidad/stock de cada platillo contra el horario (semanal o menú
+// único), descuenta el stock, guarda el pedido en ordersData, y si hay
+// notifyConfig configurado, avisa al dueño por correo (Resend). No requiere
+// API Key: lo llama el navegador del cliente, igual que save-data.php.
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 date_default_timezone_set('America/Bogota');
@@ -25,20 +24,22 @@ if (!$input) {
 
 $menuMode = ($input['menuMode'] ?? 'semanal') === 'unico' ? 'unico' : 'semanal';
 $day = $input['day'] ?? null;
-$mealTime = $input['mealTime'] ?? null;
 $cliente = $input['cliente'] ?? [];
 $items = $input['items'] ?? [];
 // 'pagina' = checkout directo del carrito; 'chat_web' = el bot desde el
 // widget del propio sitio; 'whatsapp'/'telegram' = el bot por esos canales.
 $canal = in_array($input['canal'] ?? '', ['pagina', 'chat_web', 'whatsapp', 'telegram'], true) ? $input['canal'] : 'pagina';
 $metodoPago = ($input['metodoPago'] ?? '') === 'nequi' ? 'nequi' : 'efectivo';
+// 'domicilio' (empaque + domicilio, pide dirección) · 'recoger' (solo
+// empaque, sin dirección) · 'comer_aqui' (sin cargo, sin dirección).
+$tipoEntrega = in_array($input['tipoEntrega'] ?? '', ['domicilio', 'recoger', 'comer_aqui'], true) ? $input['tipoEntrega'] : 'domicilio';
 
 $nombre = trim($cliente['nombre'] ?? '');
-$direccion = trim($cliente['direccion'] ?? '');
+$direccion = $tipoEntrega === 'domicilio' ? trim($cliente['direccion'] ?? '') : '';
 $telefono = trim($cliente['telefono'] ?? '');
 $nota = trim($cliente['nota'] ?? '');
 
-if (($menuMode === 'semanal' && !$day) || $nombre === '' || $direccion === '' || $telefono === '' || empty($items)) {
+if (($menuMode === 'semanal' && !$day) || $nombre === '' || $telefono === '' || empty($items) || ($tipoEntrega === 'domicilio' && $direccion === '')) {
     http_response_code(400);
     echo json_encode(['success' => false, 'error' => 'Faltan datos del pedido (nombre, dirección, teléfono o platillos)']);
     exit;
@@ -58,7 +59,7 @@ if ($menuMode === 'semanal' && $day !== $hoy) {
 $data = json_decode(file_get_contents($file), true);
 $dishes = $data['dishes'] ?? [];
 $categories = $data['categories'] ?? [];
-$takeoutConfig = $data['takeoutConfig'] ?? ['enabled' => false, 'fee' => 0, 'soupSizeFees' => []];
+$takeoutConfig = $data['takeoutConfig'] ?? ['enabled' => false, 'fee' => 0, 'domicilioFee' => 0];
 
 $dishesById = [];
 foreach ($dishes as $d) { $dishesById[$d['id']] = $d; }
@@ -102,18 +103,13 @@ if (!estaAbiertoAhora($businessOpenConfig)) {
     exit;
 }
 
-// Recalcula el mismo cargo de "para llevar" (empaque del plato + tamaño para
-// sopas) que se muestra en la página -- nunca se confía en el precio que
-// mande el navegador, todo pedido de la página es para llevar/domicilio.
-function cargoParaLlevar($dish, $categoriesById, $takeoutConfig, $tamano) {
-    if (empty($takeoutConfig['enabled'])) return 0;
+// Cargo de empaque de ESTE platillo -- se cobra en domicilio Y en recoger
+// (el pedido igual sale empacado), nunca en comer aquí. Nunca se confía en
+// el precio que mande el navegador, siempre se recalcula aquí.
+function cargoEmpaque($dish, $categoriesById, $takeoutConfig, $tipoEntrega) {
+    if (empty($takeoutConfig['enabled']) || $tipoEntrega === 'comer_aqui') return 0;
     $cat = $categoriesById[$dish['categoryId']] ?? null;
     if (!$cat || !empty($cat['exentoEmpaque'])) return 0;
-    $isSoup = ($cat['role'] ?? null) === 'sopa' || (empty($cat['role']) && stripos($cat['name'] ?? '', 'sopa') !== false);
-    if ($isSoup) {
-        $t = in_array($tamano, ['Normal', 'Grande'], true) ? $tamano : 'Normal';
-        return (int) ($takeoutConfig['soupSizeFees'][$t] ?? 0);
-    }
     return (int) ($takeoutConfig['fee'] ?? 0);
 }
 
@@ -153,46 +149,7 @@ foreach ($items as $item) {
         echo json_encode(['success' => false, 'error' => 'Ya no queda suficiente "' . $dish['name'] . '" (quedan ' . $schedRow['stock'] . ')']);
         exit;
     }
-    $tipo = $item['tipo'] ?? 'principal';
-    if ($tipo === 'acompanamiento') {
-        // Todo acompañamiento (venga por defecto o el cliente lo haya
-        // cambiado por otro) es GRATIS -- ya está incluido en el precio del
-        // plato principal, cambiarlo nunca afecta el total.
-        $precioUnitario = 0;
-    } else {
-        $tamano = $item['tamano'] ?? null;
-        $precioUnitario = (int) preg_replace('/\D/', '', (string) $dish['price']) + cargoParaLlevar($dish, $categoriesById, $takeoutConfig, $tamano);
-
-        // Si el cliente quitó del todo un acompañamiento opcional (no lo
-        // cambió por otro, lo quitó), y ese acompañamiento tiene configurado
-        // un descuento, se resta aquí -- calculado por el SERVIDOR contra su
-        // propia copia de la config de la CATEGORÍA (se configura una vez por
-        // categoría, ej. "Proteína", no plato por plato), nunca confiando en
-        // lo que mande el navegador. "sourceDefaultDishId" identifica el
-        // puesto (principio/arroz/ensalada) aunque el cliente lo haya
-        // cambiado por otro platillo del mismo tipo -- eso NO cuenta como
-        // "quitado".
-        $itemKey = $item['key'] ?? null;
-        $catDelPlato = $categoriesById[$dish['categoryId']] ?? [];
-        $puestosOpcionales = [];
-        if (!empty($catDelPlato['incluyePrincipio']) && !empty($catDelPlato['principioOpcional']) && !empty($catDelPlato['principioDescuento'])) {
-            $puestosOpcionales[] = ['dishId' => 'PRINCIPIO', 'descuento' => (int) $catDelPlato['principioDescuento']];
-        }
-        foreach (($catDelPlato['defaultAccompaniments'] ?? []) as $def) {
-            if (empty($def['opcional']) || empty($def['descuento'])) continue;
-            $puestosOpcionales[] = ['dishId' => $def['dishId'], 'descuento' => (int) $def['descuento']];
-        }
-        foreach ($puestosOpcionales as $puesto) {
-            $puestoOcupado = false;
-            foreach ($items as $hijo) {
-                if (($hijo['tipo'] ?? null) === 'acompanamiento' && ($hijo['parentKey'] ?? null) === $itemKey && ($hijo['sourceDefaultDishId'] ?? null) === $puesto['dishId']) {
-                    $puestoOcupado = true;
-                    break;
-                }
-            }
-            if (!$puestoOcupado) $precioUnitario = max(0, $precioUnitario - $puesto['descuento']);
-        }
-    }
+    $precioUnitario = (int) preg_replace('/\D/', '', (string) $dish['price']) + cargoEmpaque($dish, $categoriesById, $takeoutConfig, $tipoEntrega);
     $total += $precioUnitario * $cantidad;
     $resueltos[] = [
         'dishId' => $dishId,
@@ -200,9 +157,13 @@ foreach ($items as $item) {
         'name' => $dish['name'],
         'cantidad' => $cantidad,
         'precioUnitario' => $precioUnitario,
-        'tipo' => $tipo,
     ];
 }
+
+// Cargo de domicilio: UNA vez por pedido (no por platillo), solo cuando se
+// entrega a domicilio.
+$cargoDomicilio = ($tipoEntrega === 'domicilio' && !empty($takeoutConfig['enabled'])) ? (int) ($takeoutConfig['domicilioFee'] ?? 0) : 0;
+$total += $cargoDomicilio;
 
 // Todo válido -- descuenta stock (solo donde el stock se controla; null =
 // ilimitado). Nunca queda en negativo.
@@ -221,11 +182,12 @@ $order = [
     'id' => $orderId,
     'createdAt' => $orderId,
     'day' => $menuMode === 'unico' ? 'Menú único' : $day,
-    'mealTime' => $mealTime,
+    'tipoEntrega' => $tipoEntrega,
     'cliente' => ['nombre' => $nombre, 'direccion' => $direccion, 'telefono' => $telefono, 'nota' => $nota],
     'items' => array_map(function ($r) {
-        return ['dishId' => $r['dishId'], 'name' => $r['name'], 'cantidad' => $r['cantidad'], 'precioUnitario' => $r['precioUnitario'], 'tipo' => $r['tipo']];
+        return ['dishId' => $r['dishId'], 'name' => $r['name'], 'cantidad' => $r['cantidad'], 'precioUnitario' => $r['precioUnitario']];
     }, $resueltos),
+    'cargoDomicilio' => $cargoDomicilio,
     'total' => $total,
     'estado' => 'pendiente',
     'canal' => $canal,
@@ -253,13 +215,14 @@ $ownerEmail = $notify['ownerEmail'] ?? '';
 if ($resendKey && $ownerEmail) {
     $itemsHtml = '';
     foreach ($order['items'] as $it) {
-        $prefix = $it['tipo'] === 'acompanamiento' ? '+ ' : '';
-        $itemsHtml .= $prefix . $it['cantidad'] . ' x ' . $it['name'] . ' - $' . number_format($it['precioUnitario'] * $it['cantidad'], 0, ',', '.') . '<br>';
+        $itemsHtml .= $it['cantidad'] . ' x ' . $it['name'] . ' - $' . number_format($it['precioUnitario'] * $it['cantidad'], 0, ',', '.') . '<br>';
     }
+    $tipoEntregaLabel = ['domicilio' => 'A domicilio', 'recoger' => 'Para recoger', 'comer_aqui' => 'Comer aquí'][$tipoEntrega] ?? $tipoEntrega;
     $html = "<h2>Nuevo pedido #{$orderId}</h2>" .
-        "<p><b>Cliente:</b> {$nombre}<br><b>Teléfono:</b> {$telefono}<br><b>Dirección:</b> {$direccion}" .
+        "<p><b>Cliente:</b> {$nombre}<br><b>Teléfono:</b> {$telefono}" .
+        ($direccion !== '' ? "<br><b>Dirección:</b> {$direccion}" : '') .
         ($nota !== '' ? "<br><b>Nota:</b> {$nota}" : '') . '</p>' .
-        "<p><b>Día/comida:</b> {$order['day']} / {$mealTime}</p>" .
+        "<p><b>Entrega:</b> {$tipoEntregaLabel}</p>" .
         "<p><b>Pedido:</b><br>{$itemsHtml}</p>" .
         '<p><b>Total: $' . number_format($total, 0, ',', '.') . '</b></p>';
     $ch = curl_init('https://api.resend.com/emails');

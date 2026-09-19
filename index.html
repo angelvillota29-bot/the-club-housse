@@ -68,17 +68,6 @@
         <select id="public-day-select">
           <option>Lunes</option><option>Martes</option><option>Miércoles</option><option>Jueves</option><option>Viernes</option><option>Sábado</option><option>Domingo</option>
         </select>
-        <label>Comida:</label>
-        <select id="public-mealtime-select">
-          <option value="Desayuno">Desayuno</option><option value="Almuerzo">Almuerzo</option><option value="Cena">Cena</option>
-        </select>
-      </div>
-      <div id="takeout-public-container" class="takeout-option-box hidden">
-        <label class="checkbox-label"><input type="checkbox" id="public-takeout-checkbox"><span>¿Para llevar? (<strong id="takeout-fee-display">+$ 0</strong>)</span></label>
-        <div id="soup-size-selector" class="soup-size-selector hidden">
-          <label for="soup-size-select">Tamaño de la sopa:</label>
-          <select id="soup-size-select"><option value="Normal">Normal</option><option value="Grande">Grande</option></select>
-        </div>
       </div>
     </div>
     <div id="closed-banner" class="closed-banner hidden"></div>
@@ -106,8 +95,15 @@
       <button id="close-checkout-modal-btn" class="close-btn" type="button">&times;</button>
       <h2>Confirmar tu pedido</h2>
       <form id="checkout-form">
+        <div class="input-group"><label>¿Cómo lo recibes?</label>
+          <select id="checkout-tipo-entrega" required>
+            <option value="domicilio">A domicilio</option>
+            <option value="recoger">Para recoger</option>
+            <option value="comer_aqui">Comer aquí</option>
+          </select>
+        </div>
         <div class="input-group"><label>Nombre</label><input type="text" id="checkout-nombre" required></div>
-        <div class="input-group"><label>Dirección de entrega</label><input type="text" id="checkout-direccion" required></div>
+        <div class="input-group" id="checkout-direccion-group"><label>Dirección de entrega</label><input type="text" id="checkout-direccion" required></div>
         <div class="input-group"><label>Teléfono</label><input type="tel" id="checkout-telefono" required></div>
         <div class="input-group"><label>Nota (opcional)</label><input type="text" id="checkout-nota" placeholder="Ej. llamar al llegar"></div>
         <div class="input-group"><label>Método de pago</label>
@@ -116,6 +112,7 @@
             <option value="nequi">Nequi</option>
           </select>
         </div>
+        <p id="checkout-total-preview" class="text-muted"></p>
         <p id="checkout-error-msg" class="error-msg"></p>
         <button type="submit" class="btn-primary">Enviar pedido</button>
       </form>
@@ -135,7 +132,7 @@
       <div class="admin-nav-bar">
         <div class="admin-nav-buttons">
           <button id="nav-categories-btn" class="btn-nav">Categorías</button>
-          <button id="nav-mealtimes-btn" class="btn-nav">Franjas Horarias</button>
+          <button id="nav-mealtimes-btn" class="btn-nav">Disponibilidad</button>
           <button id="nav-customize-btn" class="btn-nav">Personalizar</button>
           <button id="nav-new-dish-btn" class="btn-nav">Platillos</button>
           <button id="nav-schedule-btn" class="btn-nav">Horario y Stock</button>
@@ -156,30 +153,8 @@
           <form id="create-category-form">
             <input type="hidden" id="edit-category-id">
             <div class="input-group"><input type="text" id="category-name-input" placeholder="Nombre de la categoría" required></div>
-            <div class="form-row">
-              <div class="input-group"><label>Tipo de comida</label><select id="category-mealtime-input"><option value="Desayuno">Desayuno</option><option value="Almuerzo" selected>Almuerzo</option><option value="Cena">Cena</option></select></div>
-              <div class="input-group"><label>Rol en almuerzo completo</label><select id="category-role-input">
-                <option value="">Ninguno (categoría normal)</option>
-                <option value="sopa">Sopa</option>
-                <option value="principio">Principio</option>
-                <option value="proteina">Proteína</option>
-                <option value="acompanamiento">Acompañamiento</option>
-              </select></div>
-            </div>
             <div class="input-group"><label class="checkbox-label"><input type="checkbox" id="category-delivery-input" checked> Disponible a domicilio</label></div>
-            <div class="input-group"><label class="checkbox-label"><input type="checkbox" id="category-exento-input"> Exenta de cargo de empaque/domicilio (ej. Principios)</label></div>
-
-            <div class="input-group hidden" id="category-proteina-config">
-              <label>Con qué viene por defecto cada plato de esta categoría</label>
-              <p class="text-muted">Se configura una sola vez aquí -- ya no hace falta marcarlo plato por plato. Aplica a TODOS los platillos de esta categoría, toda la semana.</p>
-              <label class="checkbox-label"><input type="checkbox" id="category-incluye-principio"> Incluye un Principio a elegir (el cliente elige entre los principios disponibles ese día)</label>
-              <div class="accomp-picker-extra hidden" id="category-principio-extra">
-                <label class="text-muted"><input type="checkbox" id="category-principio-opcional" checked> Opcional (lo puede quitar)</label>
-                <label class="text-muted">Descuento si lo quita <input type="number" id="category-principio-descuento" min="0" value="0" style="width:90px"></label>
-              </div>
-              <label style="margin-top:0.6rem;display:block;">Acompañamientos fijos (ej. Arroz, Ensalada)</label>
-              <div id="category-accompaniments-list"></div>
-            </div>
+            <div class="input-group"><label class="checkbox-label"><input type="checkbox" id="category-exento-input"> Exenta de cargo de empaque (ej. bebidas ya empacadas)</label></div>
 
             <div class="form-actions">
               <button type="submit" id="btn-save-category" class="btn-primary-sm">Agregar</button>
@@ -210,25 +185,6 @@
               <div class="input-group"><label>Cierra</label><input type="time" id="open-status-end"></div>
             </div>
             <button class="btn-primary-sm">Guardar</button>
-          </form>
-        </section>
-        <section class="admin-card">
-          <h2>Franjas Horarias (Desayuno / Almuerzo / Cena)</h2>
-          <p class="text-muted">Define el rango de horas de cada comida. El menú público detecta la hora actual del cliente y le muestra automáticamente la comida que corresponde (el cliente puede cambiarla manualmente igual).</p>
-          <form id="mealtimes-config-form">
-            <div class="form-row">
-              <div class="input-group"><label>Desayuno — Inicio</label><input type="time" id="mealtime-desayuno-start"></div>
-              <div class="input-group"><label>Desayuno — Fin</label><input type="time" id="mealtime-desayuno-end"></div>
-            </div>
-            <div class="form-row">
-              <div class="input-group"><label>Almuerzo — Inicio</label><input type="time" id="mealtime-almuerzo-start"></div>
-              <div class="input-group"><label>Almuerzo — Fin</label><input type="time" id="mealtime-almuerzo-end"></div>
-            </div>
-            <div class="form-row">
-              <div class="input-group"><label>Cena — Inicio</label><input type="time" id="mealtime-cena-start"></div>
-              <div class="input-group"><label>Cena — Fin</label><input type="time" id="mealtime-cena-end"></div>
-            </div>
-            <button class="btn-primary-sm">Guardar Franjas</button>
           </form>
         </section>
         <section class="admin-card">
@@ -372,14 +328,13 @@
           <div id="single-menu-list" class="preview-box"></div>
         </section>
         <section class="admin-card">
-          <h2>Configuración "Para Llevar"</h2>
+          <h2>Cargos de entrega</h2>
+          <p class="text-muted">El cliente elige al pagar cómo recibe el pedido: <strong>A domicilio</strong> (empaque + domicilio, pide dirección), <strong>Para recoger</strong> (solo empaque, sin dirección) o <strong>Comer aquí</strong> (sin cargo, sin dirección).</p>
           <form id="takeout-config-form">
-            <div class="checkbox-group"><label class="checkbox-label"><input type="checkbox" id="takeout-enable-checkbox"> Habilitar Para Llevar</label></div>
-            <div class="input-group"><label>Costo adicional (platillos que no son sopa)</label><input type="text" id="takeout-fee-input"></div>
-            <p class="text-muted takeout-hint">Si una categoría contiene la palabra "sopa" en su nombre, el cliente elige el tamaño y se le cobra el costo de abajo en vez del costo general.</p>
+            <div class="checkbox-group"><label class="checkbox-label"><input type="checkbox" id="takeout-enable-checkbox"> Habilitar cargos de empaque/domicilio</label></div>
             <div class="form-row">
-              <div class="input-group"><label>Costo extra sopa Normal</label><input type="text" id="soup-fee-normal-input" placeholder="0"></div>
-              <div class="input-group"><label>Costo extra sopa Grande</label><input type="text" id="soup-fee-grande-input" placeholder="0"></div>
+              <div class="input-group"><label>Costo de empaque (por platillo)</label><input type="text" id="takeout-fee-input"></div>
+              <div class="input-group"><label>Costo de domicilio (por pedido)</label><input type="text" id="domicilio-fee-input"></div>
             </div>
             <button class="btn-primary-sm">Guardar</button>
           </form>
@@ -418,12 +373,10 @@
 
           <h3 class="n8n-endpoint-title">1. Consultar todo el menú</h3>
           <p>Método <code>GET</code>, URL: <code>/api/get-menu.php</code>, Header: <code>Authorization: Bearer [TU_KEY]</code></p>
-          <p>Devuelve el menú completo organizado por día (Lunes a Domingo), con nombre, precio, descripción, categoría, tipo de comida (Desayuno/Almuerzo/Cena), disponibilidad a domicilio, imagen, disponibilidad, stock y el costo extra de "para llevar" ya calculado por platillo.</p>
+          <p>Devuelve el menú completo organizado por día (Lunes a Domingo), con nombre, precio, descripción, categoría, disponibilidad a domicilio, imagen, disponibilidad, stock y los cargos de empaque/domicilio configurados.</p>
           <p><strong>Parámetros opcionales (van en la URL):</strong></p>
-          <p><code>?mealTime=Almuerzo</code> — solo trae esa comida (Desayuno/Almuerzo/Cena). También acepta <code>?mealTime=now</code> para que detecte automáticamente la comida vigente según la hora del servidor.</p>
           <p><code>?day=Lunes</code> — solo trae ese día. También acepta <code>?day=today</code> para el día actual.</p>
-          <p>Ejemplo para traer "solo lo que se puede comprar ahora mismo": <code>/api/get-menu.php?day=today&mealTime=now</code></p>
-          <p><strong>Zona de domicilio:</strong> la respuesta también incluye <code>deliveryZoneConfig</code> con la dirección de tu local y el rango de carreras/calles a las que sí haces domicilio (si lo configuraste en "Franjas Horarias"). Este dato solo llega hasta acá, protegido con tu API Key — nunca se muestra en la página pública. n8n puede comparar la carrera/calle de la dirección que le dé el cliente contra ese rango para decidir si el domicilio aplica.</p>
+          <p><strong>Zona de domicilio:</strong> la respuesta también incluye <code>deliveryZoneConfig</code> con la dirección de tu local y el rango de carreras/calles a las que sí haces domicilio (si lo configuraste en "Disponibilidad"). Este dato solo llega hasta acá, protegido con tu API Key — nunca se muestra en la página pública. n8n puede comparar la carrera/calle de la dirección que le dé el cliente contra ese rango para decidir si el domicilio aplica.</p>
 
           <h3 class="n8n-endpoint-title">2. Actualizar stock de un platillo</h3>
           <p>Método <code>POST</code>, URL: <code>/api/update-stock.php</code>, Header: <code>Authorization: Bearer [TU_KEY]</code>, Body: <code>{ "id": 1, "stock": 19 }</code></p>
@@ -451,7 +404,7 @@
       <button id="close-privacy-modal-btn" class="close-btn" type="button">&times;</button>
       <h2>Cómo usamos tus datos</h2>
       <div class="privacy-body">
-        <p><strong>Responsable del tratamiento:</strong> Restaurante La Delicia es el único
+        <p><strong>Responsable del tratamiento:</strong> The Club Housse es el único
         responsable del tratamiento de tus datos personales recogidos en esta página y en sus
         canales de atención (WhatsApp, Telegram, chat web). Ninguna otra empresa ni proveedor
         externo es responsable de tus datos ni decide qué se hace con ellos.</p>

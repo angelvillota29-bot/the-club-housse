@@ -4,8 +4,7 @@ let currentUser = null;
 let categoriesData = [];
 let dishesData = [];
 let scheduleData = []; 
-let takeoutConfig = { enabled: false, fee: 0, soupSizeFees: { Normal: 0, Grande: 0 } };
-let mealTimesConfig = { Desayuno: { start: "06:00", end: "11:00" }, Almuerzo: { start: "11:00", end: "16:00" }, Cena: { start: "16:00", end: "22:00" } };
+let takeoutConfig = { enabled: false, fee: 0, domicilioFee: 0 };
 // 'manual' = el dueño prende/apaga con un switch · 'horario' = se calcula
 // solo contra la hora actual, todos los días igual (soporta cruzar medianoche,
 // ej. 18:00 a 00:00 -- "end" menor o igual a "start" se toma como "hasta el
@@ -25,7 +24,7 @@ let usersData = [];
 let n8nConfig = { apiKey: "" };
 let ordersData = [];
 let notifyConfig = { resendApiKey: "", ownerEmail: "" };
-let cartData = []; // { key, dishId, name, price(number), cantidad, tipo:'principal'|'acompanamiento', parentKey, day }
+let cartData = []; // { key, dishId, scheduleId, name, price(number), cantidad, day }
 let cartExpanded = false;
 // 'semanal' = horario por día (el de siempre) · 'unico' = un solo menú fijo,
 // todos los días igual (independiente del horario semanal, no lo borra).
@@ -60,7 +59,6 @@ function reiniciarStockDiario(filas) {
   return cambio;
 }
 
-let isPublicTakeoutActive = false;
 let pendingDeleteAction = null;
 
 // PHP no distingue entre un objeto vacío {} y un arreglo vacío [], así
@@ -86,13 +84,7 @@ async function loadAllData() {
     // TODOS sus platillos, toda la semana -- así no hay que repetirlo plato
     // por plato.
     categoriesData.forEach(c => {
-      if (!c.mealTime) c.mealTime = 'Almuerzo';
       if (c.deliveryEnabled === undefined) c.deliveryEnabled = true;
-      if (c.role === undefined) c.role = '';
-      if (!Array.isArray(c.defaultAccompaniments)) c.defaultAccompaniments = [];
-      if (c.incluyePrincipio === undefined) c.incluyePrincipio = false;
-      if (c.principioOpcional === undefined) c.principioOpcional = true;
-      if (c.principioDescuento === undefined) c.principioDescuento = 0;
     });
     dishesData = data.dishes || [];
     scheduleData = data.schedule || [];
@@ -106,9 +98,7 @@ async function loadAllData() {
       if (s.stockDefinido === undefined) s.stockDefinido = s.stock ?? null;
       if (s.stockResetDate === undefined) s.stockResetDate = fechaHoyBogota();
     });
-    takeoutConfig = ensureObject(data.takeoutConfig, { enabled: false, fee: 0, soupSizeFees: { Normal: 0, Grande: 0 } });
-    takeoutConfig.soupSizeFees = ensureObject(takeoutConfig.soupSizeFees, { Normal: 0, Grande: 0 });
-    mealTimesConfig = ensureObject(data.mealTimesConfig, { Desayuno: { start: "06:00", end: "11:00" }, Almuerzo: { start: "11:00", end: "16:00" }, Cena: { start: "16:00", end: "22:00" } });
+    takeoutConfig = ensureObject(data.takeoutConfig, { enabled: false, fee: 0, domicilioFee: 0 });
     businessOpenConfig = ensureObject(data.businessOpenConfig, { mode: 'manual', abiertoManual: true, horario: { start: "18:00", end: "00:00" } });
     businessOpenConfig.horario = ensureObject(businessOpenConfig.horario, { start: "18:00", end: "00:00" });
     deliveryZoneConfig = ensureObject(data.deliveryZoneConfig, { enabled: false, address: '', carreraFrom: '', carreraTo: '', calleFrom: '', calleTo: '' });
@@ -130,7 +120,7 @@ async function loadAllData() {
 }
 
 async function saveAllData() {
-  const payload = { categories: categoriesData, dishes: dishesData, schedule: scheduleData, menuMode, singleMenuSchedule, takeoutConfig, mealTimesConfig, businessOpenConfig, deliveryZoneConfig, brandingConfig, usersData, n8nConfig, ordersData, notifyConfig };
+  const payload = { categories: categoriesData, dishes: dishesData, schedule: scheduleData, menuMode, singleMenuSchedule, takeoutConfig, businessOpenConfig, deliveryZoneConfig, brandingConfig, usersData, n8nConfig, ordersData, notifyConfig };
   try {
     const response = await fetch('api/save-data.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const result = await response.json();
@@ -160,24 +150,6 @@ function formatCurrency(input) {
 }
 function parseCurrencyNumber(formattedString) { return parseInt(String(formattedString).replace(/\D/g, ""), 10) || 0; }
 function getCurrentDayName() { return ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"][new Date().getDay()]; }
-
-function timeToMinutes(t) { const [h, m] = String(t).split(':').map(Number); return (h || 0) * 60 + (m || 0); }
-function getAutoMealTime() {
-  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
-  for (const key of ['Desayuno', 'Almuerzo', 'Cena']) {
-    const range = mealTimesConfig[key];
-    if (!range || !range.start || !range.end) continue;
-    const start = timeToMinutes(range.start);
-    const end = timeToMinutes(range.end);
-    if (start <= end) {
-      if (nowMin >= start && nowMin < end) return key;
-    } else {
-      // Franja que cruza la medianoche (ej. Cena 18:00 a 02:00)
-      if (nowMin >= start || nowMin < end) return key;
-    }
-  }
-  return 'Almuerzo';
-}
 
 function applyBrandingSettings() {
   const root = document.documentElement;
@@ -222,10 +194,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadAllData();
   applyBrandingSettings();
 
-  // Detecta automáticamente Desayuno/Almuerzo/Cena según la hora del
-  // cliente. El cliente puede cambiarlo manualmente después.
-  document.getElementById('public-mealtime-select').value = getAutoMealTime();
-
   const loginModal = document.getElementById('login-modal');
   const loginForm = document.getElementById('login-form');
   const errorMsg = document.getElementById('error-msg');
@@ -236,9 +204,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const navUsersBtn = document.getElementById('nav-users-btn');
   const navN8nBtn = document.getElementById('nav-n8n-btn');
   const navOrdersBtn = document.getElementById('nav-orders-btn');
-  const takeoutPublicContainer = document.getElementById('takeout-public-container');
-  const publicTakeoutCheckbox = document.getElementById('public-takeout-checkbox');
-  const soupSizeSelector = document.getElementById('soup-size-selector');
 
   document.getElementById('open-login-btn').addEventListener('click', () => loginModal.classList.remove('hidden'));
   document.getElementById('close-modal-btn').addEventListener('click', () => loginModal.classList.add('hidden'));
@@ -290,7 +255,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function showSection(id) { showWelcomeSection(); document.getElementById('welcome-section').classList.add('hidden'); document.getElementById(id).classList.remove('hidden'); }
 
   document.getElementById('nav-categories-btn').addEventListener('click', () => { showSection('section-categories'); renderCategoriesSection(); });
-  document.getElementById('nav-mealtimes-btn').addEventListener('click', () => { showSection('section-mealtimes'); loadOpenStatusFields(); loadMealTimesFields(); loadDeliveryZoneFields(); });
+  document.getElementById('nav-mealtimes-btn').addEventListener('click', () => { showSection('section-mealtimes'); loadOpenStatusFields(); loadDeliveryZoneFields(); });
   document.getElementById('nav-customize-btn').addEventListener('click', () => { showSection('section-customize'); loadCustomizeFields(); });
   document.getElementById('nav-new-dish-btn').addEventListener('click', () => { showSection('section-dishes'); renderDishesSection(); });
   document.getElementById('nav-schedule-btn').addEventListener('click', () => { showSection('section-schedule'); renderScheduleMatrixSection(); loadTakeoutFields(); });
@@ -298,36 +263,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('nav-n8n-btn').addEventListener('click', () => { showSection('section-n8n'); loadConfigStatus(); });
   document.getElementById('nav-users-btn').addEventListener('click', () => { showSection('section-users'); renderUsersSection(); });
 
-  // El bloque de "con qué viene por defecto" solo tiene sentido para la
-  // categoría de Proteína -- se oculta para cualquier otro rol.
-  function toggleCategoryProteinaConfig() {
-    const esProteina = document.getElementById('category-role-input').value === 'proteina';
-    document.getElementById('category-proteina-config').classList.toggle('hidden', !esProteina);
-  }
-  document.getElementById('category-role-input').addEventListener('change', toggleCategoryProteinaConfig);
-  document.getElementById('category-incluye-principio').addEventListener('change', (e) => {
-    document.getElementById('category-principio-extra').classList.toggle('hidden', !e.target.checked);
-  });
-
   document.getElementById('create-category-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const editId = document.getElementById('edit-category-id').value;
     const name = document.getElementById('category-name-input').value.trim();
-    const mealTime = document.getElementById('category-mealtime-input').value;
-    const role = document.getElementById('category-role-input').value;
     const deliveryEnabled = document.getElementById('category-delivery-input').checked;
     const exentoEmpaque = document.getElementById('category-exento-input').checked;
-    const incluyePrincipio = document.getElementById('category-incluye-principio').checked;
-    const principioOpcional = document.getElementById('category-principio-opcional').checked;
-    const principioDescuento = Math.max(0, parseInt(document.getElementById('category-principio-descuento').value, 10) || 0);
-    const defaultAccompaniments = Array.from(document.querySelectorAll('#category-accompaniments-list .accomp-check:checked')).map(el => {
-      const dishId = Number(el.value);
-      const opcionalEl = document.querySelector(`#category-accompaniments-list .accomp-opcional[data-for="${dishId}"]`);
-      const descuentoEl = document.querySelector(`#category-accompaniments-list .accomp-descuento[data-for="${dishId}"]`);
-      return { dishId, opcional: opcionalEl ? opcionalEl.checked : true, descuento: Math.max(0, parseInt(descuentoEl?.value, 10) || 0) };
-    });
     if (!name) return;
-    const campos = { name, mealTime, role, deliveryEnabled, exentoEmpaque, incluyePrincipio, principioOpcional, principioDescuento, defaultAccompaniments };
+    const campos = { name, deliveryEnabled, exentoEmpaque };
     if (editId) {
       const cat = categoriesData.find(c => c.id === Number(editId));
       if (cat) Object.assign(cat, campos);
@@ -353,25 +296,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btn-save-category').textContent = 'Agregar';
     document.getElementById('btn-cancel-edit-category').classList.add('hidden');
     document.getElementById('category-delivery-input').checked = true;
-    document.getElementById('category-principio-extra').classList.add('hidden');
-    renderCategoryAccompanimentsPicker([]);
-    toggleCategoryProteinaConfig();
   }
   window.editCategory = (id) => {
     const cat = categoriesData.find(c => c.id === id);
     if (!cat) return;
     document.getElementById('edit-category-id').value = cat.id;
     document.getElementById('category-name-input').value = cat.name;
-    document.getElementById('category-mealtime-input').value = cat.mealTime || 'Almuerzo';
-    document.getElementById('category-role-input').value = cat.role || '';
     document.getElementById('category-delivery-input').checked = cat.deliveryEnabled !== false;
     document.getElementById('category-exento-input').checked = !!cat.exentoEmpaque;
-    document.getElementById('category-incluye-principio').checked = !!cat.incluyePrincipio;
-    document.getElementById('category-principio-opcional').checked = cat.principioOpcional !== false;
-    document.getElementById('category-principio-descuento').value = cat.principioDescuento || 0;
-    document.getElementById('category-principio-extra').classList.toggle('hidden', !cat.incluyePrincipio);
-    renderCategoryAccompanimentsPicker(cat.defaultAccompaniments || []);
-    toggleCategoryProteinaConfig();
     document.getElementById('category-form-title').textContent = `Editando: ${cat.name}`;
     document.getElementById('btn-save-category').textContent = 'Actualizar';
     document.getElementById('btn-cancel-edit-category').classList.remove('hidden');
@@ -405,53 +337,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderCategoriesSection();
     renderPublicMenu();
   };
-  window.changeCategoryMealTime = async (id, value) => {
-    const cat = categoriesData.find(c => c.id === id);
-    if (!cat) return;
-    cat.mealTime = value;
-    await saveAllData();
-    renderPublicMenu();
-  };
-  window.changeCategoryRole = async (id, value) => {
-    const cat = categoriesData.find(c => c.id === id);
-    if (!cat) return;
-    cat.role = value;
-    await saveAllData();
-    renderDishesSection();
-    renderPublicMenu();
-  };
-  const ROLE_LABELS = { sopa: 'Sopa', principio: 'Principio', proteina: 'Proteína', acompanamiento: 'Acompañamiento' };
   function renderCategoriesSection() {
-    // Solo refresca las opciones del picker si el formulario está vacío
-    // (creando una nueva categoría) -- si está editando una, no le pises la
-    // selección que ya cargó editCategory().
-    if (!document.getElementById('edit-category-id').value) {
-      renderCategoryAccompanimentsPicker([]);
-      toggleCategoryProteinaConfig();
-    }
     const list = document.getElementById('categories-management-list');
     list.innerHTML = '';
     categoriesData.forEach(cat => list.innerHTML += `<div class="preview-category">
       <div class="preview-category-header"><h4>${cat.name} (${dishesData.filter(d => d.categoryId === cat.id).length} platillos)</h4><div class="action-btns"><button class="btn-edit-sm" onclick="editCategory(${cat.id})">Editar</button><button class="btn-danger-sm" onclick="deleteCategory(${cat.id})">Eliminar</button></div></div>
       <div class="category-options-row">
-        <label class="checkbox-label small-select">Comida:
-          <select onchange="changeCategoryMealTime(${cat.id}, this.value)">
-            <option value="Desayuno" ${cat.mealTime === 'Desayuno' ? 'selected' : ''}>Desayuno</option>
-            <option value="Almuerzo" ${cat.mealTime === 'Almuerzo' ? 'selected' : ''}>Almuerzo</option>
-            <option value="Cena" ${cat.mealTime === 'Cena' ? 'selected' : ''}>Cena</option>
-          </select>
-        </label>
-        <label class="checkbox-label small-select">Rol:
-          <select onchange="changeCategoryRole(${cat.id}, this.value)">
-            <option value="" ${!cat.role ? 'selected' : ''}>Ninguno</option>
-            <option value="sopa" ${cat.role === 'sopa' ? 'selected' : ''}>Sopa</option>
-            <option value="principio" ${cat.role === 'principio' ? 'selected' : ''}>Principio</option>
-            <option value="proteina" ${cat.role === 'proteina' ? 'selected' : ''}>Proteína</option>
-            <option value="acompanamiento" ${cat.role === 'acompanamiento' ? 'selected' : ''}>Acompañamiento</option>
-          </select>
-        </label>
         <label class="checkbox-label"><input type="checkbox" onchange="toggleDeliveryEnabled(${cat.id})" ${cat.deliveryEnabled !== false ? 'checked' : ''}> Disponible a domicilio</label>
-        <label class="checkbox-label"><input type="checkbox" onchange="toggleExentoEmpaque(${cat.id})" ${cat.exentoEmpaque ? 'checked' : ''}> Exenta de cargo de empaque/domicilio</label>
+        <label class="checkbox-label"><input type="checkbox" onchange="toggleExentoEmpaque(${cat.id})" ${cat.exentoEmpaque ? 'checked' : ''}> Exenta de cargo de empaque</label>
       </div>
     </div>`);
   }
@@ -484,24 +377,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     alert("Estado guardado");
   });
 
-  function loadMealTimesFields() {
-    document.getElementById('mealtime-desayuno-start').value = mealTimesConfig.Desayuno?.start || '06:00';
-    document.getElementById('mealtime-desayuno-end').value = mealTimesConfig.Desayuno?.end || '11:00';
-    document.getElementById('mealtime-almuerzo-start').value = mealTimesConfig.Almuerzo?.start || '11:00';
-    document.getElementById('mealtime-almuerzo-end').value = mealTimesConfig.Almuerzo?.end || '16:00';
-    document.getElementById('mealtime-cena-start').value = mealTimesConfig.Cena?.start || '16:00';
-    document.getElementById('mealtime-cena-end').value = mealTimesConfig.Cena?.end || '22:00';
-  }
-  document.getElementById('mealtimes-config-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    mealTimesConfig = {
-      Desayuno: { start: document.getElementById('mealtime-desayuno-start').value || '06:00', end: document.getElementById('mealtime-desayuno-end').value || '11:00' },
-      Almuerzo: { start: document.getElementById('mealtime-almuerzo-start').value || '11:00', end: document.getElementById('mealtime-almuerzo-end').value || '16:00' },
-      Cena: { start: document.getElementById('mealtime-cena-start').value || '16:00', end: document.getElementById('mealtime-cena-end').value || '22:00' }
-    };
-    await saveAllData();
-    alert("Franjas horarias guardadas");
-  });
 
   function loadDeliveryZoneFields() {
     document.getElementById('delivery-zone-enable-checkbox').checked = !!deliveryZoneConfig.enabled;
@@ -698,37 +573,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       renderPublicMenu();
     });
   };
-  // selectedAccompaniments: [{ dishId, opcional, descuento }] -- se usa para
-  // configurar, UNA sola vez por categoría (ej. "Proteína"), con qué viene
-  // por defecto CUALQUIER platillo de esa categoría (ver renderMenuModeUI...
-  // en realidad ver el bloque de categorías más abajo).
-  function renderCategoryAccompanimentsPicker(selectedAccompaniments) {
-    const wrap = document.getElementById('category-accompaniments-list');
-    if (!wrap) return;
-    const acompCatIds = categoriesData.filter(c => c.role === 'acompanamiento').map(c => c.id);
-    const opciones = dishesData.filter(d => acompCatIds.includes(d.categoryId));
-    if (opciones.length === 0) {
-      wrap.innerHTML = '<p class="text-muted">Sin platillos en categorías con rol "Acompañamiento" todavía. Créalos primero.</p>';
-      return;
-    }
-    wrap.innerHTML = opciones.map(d => {
-      const actual = selectedAccompaniments.find(a => a.dishId === d.id);
-      const marcado = !!actual;
-      const opcional = actual ? actual.opcional !== false : true;
-      const descuento = actual?.descuento || 0;
-      return `<div class="accomp-picker-row">
-        <label class="checkbox-label"><input type="checkbox" class="accomp-check" value="${d.id}" onchange="toggleAccompPickerRow(this)" ${marcado ? 'checked' : ''}> ${d.name}</label>
-        <span class="accomp-picker-extra" style="${marcado ? '' : 'display:none;'}">
-          <label class="text-muted">Opcional (el cliente lo puede quitar) <input type="checkbox" class="accomp-opcional" data-for="${d.id}" ${opcional ? 'checked' : ''}></label>
-          <label class="text-muted">Descuento si lo quita <input type="number" class="accomp-descuento" data-for="${d.id}" min="0" value="${descuento}" style="width:90px"></label>
-        </span>
-      </div>`;
-    }).join('');
-  }
-  window.toggleAccompPickerRow = (checkbox) => {
-    const extra = checkbox.closest('.accomp-picker-row').querySelector('.accomp-picker-extra');
-    extra.style.display = checkbox.checked ? '' : 'none';
-  };
   function renderDishesSection() {
     const sel = document.getElementById('select-category');
     sel.innerHTML = '<option value="">-- Seleccionar --</option>';
@@ -881,8 +725,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function loadTakeoutFields() {
     document.getElementById('takeout-enable-checkbox').checked = !!takeoutConfig.enabled;
     document.getElementById('takeout-fee-input').value = takeoutConfig.fee || '';
-    document.getElementById('soup-fee-normal-input').value = takeoutConfig.soupSizeFees?.Normal || '';
-    document.getElementById('soup-fee-grande-input').value = takeoutConfig.soupSizeFees?.Grande || '';
+    document.getElementById('domicilio-fee-input').value = takeoutConfig.domicilioFee || '';
   }
 
   // Ya no genera/guarda la key en data.json (se leía sin protección desde
@@ -950,32 +793,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   function requestDelete(msg, action) { document.getElementById('delete-modal-msg').textContent = msg; pendingDeleteAction = action; document.getElementById('delete-modal').classList.remove('hidden'); }
 
   document.getElementById('public-day-select').addEventListener('change', renderPublicMenu);
-  document.getElementById('public-mealtime-select').addEventListener('change', renderPublicMenu);
-
-  publicTakeoutCheckbox.addEventListener('change', (e) => { 
-    isPublicTakeoutActive = e.target.checked; 
-    if (isPublicTakeoutActive && takeoutConfig.enabled) {
-      soupSizeSelector.classList.remove('hidden');
-    } else {
-      soupSizeSelector.classList.add('hidden');
-      document.getElementById('soup-size-select').value = 'Normal';
-    }
-    renderPublicMenu(); 
-  });
-
-  document.getElementById('soup-size-select').addEventListener('change', renderPublicMenu);
 
   document.getElementById('takeout-config-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     takeoutConfig.enabled = document.getElementById('takeout-enable-checkbox').checked;
     takeoutConfig.fee = parseCurrencyNumber(document.getElementById('takeout-fee-input').value);
-    takeoutConfig.soupSizeFees = {
-      Normal: parseCurrencyNumber(document.getElementById('soup-fee-normal-input').value),
-      Grande: parseCurrencyNumber(document.getElementById('soup-fee-grande-input').value)
-    };
+    takeoutConfig.domicilioFee = parseCurrencyNumber(document.getElementById('domicilio-fee-input').value);
     await saveAllData();
     renderPublicMenu();
-    alert("Configuración de para llevar guardada");
+    alert("Cargos de entrega guardados");
   });
 
   function renderPublicMenu() {
@@ -986,7 +812,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Se fuerza a leer el valor del selector, no el día actual
     const day = document.getElementById('public-day-select').value;
     const esHoy = esUnico || day === nombreDiaHoy();
-    const selectedMealTime = document.getElementById('public-mealtime-select').value;
     // Menú único: un solo listado, sin filtrar por día. Menú semanal: solo
     // los platillos asignados exactamente al día elegido.
     const items = esUnico ? singleMenuSchedule : scheduleData.filter(s => s.day === day);
@@ -1000,18 +825,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       closedBanner.classList.remove('hidden');
     } else closedBanner.classList.add('hidden');
 
-    if (takeoutConfig.enabled) {
-      document.getElementById('takeout-public-container').classList.remove('hidden');
-      document.getElementById('takeout-fee-display').textContent = `+${formatCurrency(takeoutConfig.fee)}`;
-    } else document.getElementById('takeout-public-container').classList.add('hidden');
-
-    categoriesData.filter(cat => (cat.mealTime || 'Almuerzo') === selectedMealTime).forEach(cat => {
+    categoriesData.forEach(cat => {
       let catDishes = items
         .filter(s => dishesData.find(d => d.id === s.dishId)?.categoryId === cat.id)
         .map(s => ({ ...dishesData.find(d => d.id === s.dishId), available: s.available, stock: s.stock }));
 
       if (catDishes.length > 0) {
-        const isSoupCategory = cat.role === 'sopa' || (!cat.role && cat.name.toLowerCase().includes("sopa"));
         const deliveryBadge = cat.deliveryEnabled === false ? '<span class="delivery-badge no-delivery">🚫 No disponible a domicilio</span>' : '';
         let html = `<h2 class="category-title">${cat.name} ${deliveryBadge}</h2>`;
         catDishes.forEach(dish => {
@@ -1021,20 +840,11 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (dish.stock > 0) stockBadge = `<span class="badge-stock">Quedan ${dish.stock}</span>`;
           if (dish.stock === 0) stockBadge = '<span class="badge-soldout">AGOTADO</span>';
 
-          let price = dish.price;
-          let soupTag = '';
-          if (isPublicTakeoutActive && !cat.exentoEmpaque) {
-            const selectedSize = document.getElementById('soup-size-select').value;
-            const extra = isSoupCategory ? (takeoutConfig.soupSizeFees?.[selectedSize] || 0) : takeoutConfig.fee;
-            price = formatCurrency(parseCurrencyNumber(dish.price) + extra);
-            if (isSoupCategory) soupTag = `<span class="takeout-badge">Tamaño: ${selectedSize}</span>`;
-          }
-
           const imageHtml = dish.imageUrl ? `<img class="menu-item-image" src="${dish.imageUrl}" alt="${dish.name}">` : '';
 
           html += `<div class="menu-item ${isSoldOut ? 'sold-out' : ''}">
-            <div class="item-info">${imageHtml}<div class="item-info-text"><h3>${dish.name} ${stockBadge}</h3>${dish.desc ? `<p>${dish.desc}</p>` : ''}${soupTag}</div></div>
-            <div class="price-container"><span class="price">${price}</span>${(isPublicTakeoutActive && !cat.exentoEmpaque) ? '<span class="takeout-badge">Incluye empaque</span>' : ''}
+            <div class="item-info">${imageHtml}<div class="item-info-text"><h3>${dish.name} ${stockBadge}</h3>${dish.desc ? `<p>${dish.desc}</p>` : ''}</div></div>
+            <div class="price-container"><span class="price">${dish.price}</span>
               ${(!isSoldOut && esHoy && negocioAbierto) ? `<button type="button" class="btn-add-cart" onclick="addToCart(${dish.id})">+ Agregar</button>` : ''}
             </div>
           </div>`;
@@ -1042,7 +852,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         list.innerHTML += `<section class="menu-section">${html}</section>`;
       }
     });
-    if (!list.innerHTML) list.innerHTML = '<p class="text-muted" style="text-align:center;">No hay platillos para esta comida en este día.</p>';
+    if (!list.innerHTML) list.innerHTML = '<p class="text-muted" style="text-align:center;">No hay platillos para este día.</p>';
   }
 
   // ── Carrito / pedido directo en la página ──────────────────────────────
@@ -1057,135 +867,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!sched) return null;
     return { id: dish.id, name: dish.name, price: dish.price, scheduleId: sched.id, available: sched.available, stock: sched.stock };
   }
-  // role = 'acompanamiento' (Arroz/Ensalada, el "seco") o 'principio' -- cada
-  // acompañamiento solo se puede cambiar por otro de SU MISMO tipo (un
-  // principio se cambia por otro principio, nunca por arroz).
-  function getAccompanimentOptions(day, role) {
-    const catIds = categoriesData.filter(c => c.role === role).map(c => c.id);
-    return dishesData.filter(d => catIds.includes(d.categoryId)).map(d => {
-      const item = getMenuItemForDay(d.id, day);
-      return (item && item.available !== false && item.stock !== 0) ? { id: d.id, name: d.name } : null;
-    }).filter(Boolean);
-  }
   function newCartKey() { return 'c' + Date.now() + Math.random().toString(36).slice(2, 7); }
-
-  // Todo pedido de la página es para llevar/domicilio -- el cargo de
-  // "para llevar" ya configurado (takeoutConfig) se suma solo, sin depender
-  // del checkbox de vista previa del menú público.
-  function esCategoriaSopa(cat) {
-    return !!cat && (cat.role === 'sopa' || (!cat.role && (cat.name || '').toLowerCase().includes('sopa')));
-  }
-  function cargoParaLlevar(cat, tamano) {
-    if (!takeoutConfig.enabled || !cat || cat.exentoEmpaque) return 0;
-    if (esCategoriaSopa(cat)) return takeoutConfig.soupSizeFees?.[tamano] || 0;
-    return takeoutConfig.fee || 0;
-  }
 
   window.addToCart = (dishId) => {
     const day = document.getElementById('public-day-select').value;
-    const mealTime = document.getElementById('public-mealtime-select').value;
     const item = getMenuItemForDay(dishId, day);
     if (!item || item.available === false || item.stock === 0) { alert('Ese platillo ya no está disponible.'); return; }
-    const dish = dishesData.find(d => d.id === dishId);
-    const cat = categoriesData.find(c => c.id === dish?.categoryId);
-    // El tamaño (sopas) empieza en Normal y se puede cambiar después, ya en
-    // el carrito -- no hace falta elegirlo antes de agregar.
-    let tamano = (takeoutConfig.enabled && cat && !cat.exentoEmpaque && esCategoriaSopa(cat)) ? 'Normal' : null;
-    const extra = cargoParaLlevar(cat, tamano);
-    const key = newCartKey();
-    cartData.push({ key, dishId: item.id, scheduleId: item.scheduleId, name: item.name, price: parseCurrencyNumber(item.price) + extra, cantidad: 1, tipo: 'principal', parentKey: null, day, mealTime, tamano, empaqueFee: extra });
-
-    // Con qué viene por defecto: se configura UNA vez por categoría (ej.
-    // "Proteína"), no plato por plato -- aplica a cualquier platillo de esa
-    // categoría, todos los días. Los acompañamientos siempre son GRATIS, ya
-    // están incluidos en el precio del principal.
-    if (cat) {
-      // Principio a elegir: se agrega solo el primero disponible ese día, y
-      // el cliente lo puede cambiar por cualquier otro principio (dropdown
-      // en el carrito). "PRINCIPIO" identifica ese puesto de forma fija,
-      // aunque el platillo elegido cambie.
-      if (cat.incluyePrincipio) {
-        const principioCatIds = categoriesData.filter(c => c.role === 'principio').map(c => c.id);
-        const principioDisponible = dishesData.find(d => {
-          if (!principioCatIds.includes(d.categoryId)) return false;
-          const it = getMenuItemForDay(d.id, day);
-          return it && it.available !== false && it.stock !== 0;
-        });
-        if (principioDisponible) {
-          const accItem = getMenuItemForDay(principioDisponible.id, day);
-          cartData.push({
-            key: newCartKey(), dishId: accItem.id, scheduleId: accItem.scheduleId, name: accItem.name,
-            price: 0, cantidad: 1, tipo: 'acompanamiento', parentKey: key, day, mealTime, esDefault: true,
-            sourceDefaultDishId: 'PRINCIPIO', opcional: cat.principioOpcional !== false, descuentoSiSeQuita: cat.principioDescuento || 0,
-          });
-        }
-      }
-      // Acompañamientos fijos (arroz, ensalada...) -- sourceDefaultDishId
-      // identifica de forma permanente qué "puesto" ocupa, aunque el
-      // cliente lo cambie por otro -- así el servidor sabe, al final, si ese
-      // puesto quedó realmente vacío (quitado) o solo cambiado (sigue gratis).
-      (cat.defaultAccompaniments || []).forEach(acc => {
-        const accItem = getMenuItemForDay(acc.dishId, day);
-        if (accItem && accItem.available !== false && accItem.stock !== 0) {
-          cartData.push({
-            key: newCartKey(), dishId: accItem.id, scheduleId: accItem.scheduleId, name: accItem.name,
-            price: 0, cantidad: 1, tipo: 'acompanamiento', parentKey: key, day, mealTime, esDefault: true,
-            sourceDefaultDishId: acc.dishId, opcional: !!acc.opcional, descuentoSiSeQuita: acc.descuento || 0,
-          });
-        }
-      });
-    }
-    renderCart();
-  };
-  // Cambia el tamaño (Normal/Grande) de una sopa YA agregada al carrito --
-  // recalcula el cargo de empaque en el momento, sin tener que quitarla y
-  // volver a agregarla.
-  window.changeCartTamano = (key, nuevoTamano) => {
-    const item = cartData.find(i => i.key === key);
-    if (!item) return;
-    const dish = dishesData.find(d => d.id === item.dishId);
-    const cat = categoriesData.find(c => c.id === dish?.categoryId);
-    const nuevoExtra = cargoParaLlevar(cat, nuevoTamano);
-    item.price = item.price - (item.empaqueFee || 0) + nuevoExtra;
-    item.empaqueFee = nuevoExtra;
-    item.tamano = nuevoTamano;
+    cartData.push({ key: newCartKey(), dishId: item.id, scheduleId: item.scheduleId, name: item.name, price: parseCurrencyNumber(item.price), cantidad: 1, day });
     renderCart();
   };
   window.changeCartQty = (key, delta) => {
     const item = cartData.find(i => i.key === key);
     if (!item) return;
     item.cantidad = Math.max(1, item.cantidad + delta);
-    if (item.tipo === 'principal') cartData.filter(i => i.parentKey === key).forEach(a => { a.cantidad = item.cantidad; });
     renderCart();
   };
   window.removeFromCart = (key) => {
-    const item = cartData.find(i => i.key === key);
-    if (!item) return;
-    if (item.tipo === 'principal') {
-      cartData = cartData.filter(i => i.key !== key && i.parentKey !== key);
-    } else {
-      // Si el restaurante configuró un descuento para cuando el cliente
-      // quita este acompañamiento, se resta del plato principal al que
-      // pertenece (nunca queda en negativo).
-      if (item.descuentoSiSeQuita) {
-        const padre = cartData.find(i => i.key === item.parentKey);
-        if (padre) padre.price = Math.max(0, padre.price - item.descuentoSiSeQuita);
-      }
-      cartData = cartData.filter(i => i.key !== key);
-    }
-    renderCart();
-  };
-  window.swapAccompaniment = (key, newDishIdStr) => {
-    if (!newDishIdStr) return;
-    const item = cartData.find(i => i.key === key);
-    if (!item) return;
-    const newItem = getMenuItemForDay(Number(newDishIdStr), item.day);
-    if (!newItem) return;
-    item.dishId = newItem.id;
-    item.scheduleId = newItem.scheduleId;
-    item.name = newItem.name;
-    item.price = 0; // cambiar un acompañamiento por otro NUNCA cambia el precio -- siempre incluido/gratis
-    item.esDefault = false; // ya no es el que venía por defecto, pero sigue gratis igual
+    cartData = cartData.filter(i => i.key !== key);
     renderCart();
   };
   function renderCart() {
@@ -1208,7 +906,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       panel.classList.add('hidden');
       badge.classList.remove('hidden');
       document.body.classList.remove('cart-expanded');
-      const platos = cartData.filter(i => i.tipo === 'principal').reduce((sum, i) => sum + i.cantidad, 0);
+      const platos = cartData.reduce((sum, i) => sum + i.cantidad, 0);
       document.getElementById('cart-mini-count').textContent = platos;
       document.getElementById('cart-mini-total').textContent = formatCurrency(total);
       return;
@@ -1218,10 +916,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     badge.classList.add('hidden');
     panel.classList.remove('hidden');
     document.body.classList.add('cart-expanded');
-    const principales = cartData.filter(i => i.tipo === 'principal');
     let html = '';
-    principales.forEach(p => {
-      const acomps = cartData.filter(i => i.parentKey === p.key);
+    cartData.forEach(p => {
       html += `<div class="cart-item-group">
         <div class="cart-item-row">
           <span class="cart-item-name">${p.cantidad} x ${p.name}</span>
@@ -1232,35 +928,39 @@ document.addEventListener('DOMContentLoaded', async () => {
             <button type="button" class="btn-danger-sm" onclick="removeFromCart('${p.key}')">X</button>
           </div>
         </div>
-        ${p.tamano ? `<div class="cart-accomp-row">
-          <label class="text-muted">Tamaño:
-            <select onchange="changeCartTamano('${p.key}', this.value)">
-              <option value="Normal" ${p.tamano === 'Normal' ? 'selected' : ''}>Normal</option>
-              <option value="Grande" ${p.tamano === 'Grande' ? 'selected' : ''}>Grande</option>
-            </select>
-          </label>
-          <span class="takeout-badge">Empaque +${formatCurrency(p.empaqueFee)}</span>
-        </div>` : (p.empaqueFee ? `<div class="cart-accomp-row"><span class="takeout-badge">Incluye empaque +${formatCurrency(p.empaqueFee)}</span></div>` : '')}
-        ${acomps.map(a => {
-          const rol = categoriesData.find(c => c.id === dishesData.find(d => d.id === a.dishId)?.categoryId)?.role || 'acompanamiento';
-          const opciones = getAccompanimentOptions(a.day, rol).filter(o => o.id !== a.dishId);
-          return `<div class="cart-accomp-row">
-          <span>+ ${a.name} <em>(incluido)</em></span>
-          <span>Incluido</span>
-          <div class="cart-item-qty">
-            ${opciones.length ? `<select onchange="swapAccompaniment('${a.key}', this.value)">
-              <option value="">Cambiar por...</option>
-              ${opciones.map(o => `<option value="${o.id}">${o.name}</option>`).join('')}
-            </select>` : ''}
-            ${a.opcional ? `<button type="button" class="btn-danger-sm" onclick="removeFromCart('${a.key}')">Quitar</button>` : ''}
-          </div>
-        </div>`;
-        }).join('')}
       </div>`;
     });
     itemsWrap.innerHTML = html;
     document.getElementById('cart-total-amount').textContent = formatCurrency(total);
+    actualizarResumenEntrega();
   }
+
+  // ── Tipo de entrega (Domicilio/Recoger/Comer aquí): calcula el cargo que
+  // se va a sumar al total (empaque en llevar/recoger, +domicilio solo en
+  // domicilio) y muestra/oculta la dirección según haga falta. El total
+  // final SIEMPRE lo recalcula el servidor (place-order.php) -- esto es
+  // solo la vista previa para que el cliente sepa cuánto va a pagar.
+  function calcularCargoEntrega(tipoEntrega) {
+    if (!takeoutConfig.enabled || tipoEntrega === 'comer_aqui') return 0;
+    const cantidadPlatos = cartData.reduce((sum, i) => sum + i.cantidad, 0);
+    const empaque = (takeoutConfig.fee || 0) * cantidadPlatos;
+    const domicilio = tipoEntrega === 'domicilio' ? (takeoutConfig.domicilioFee || 0) : 0;
+    return empaque + domicilio;
+  }
+  function actualizarResumenEntrega() {
+    const tipoEntrega = document.getElementById('checkout-tipo-entrega')?.value || 'domicilio';
+    document.getElementById('checkout-direccion-group').classList.toggle('hidden', tipoEntrega !== 'domicilio');
+    document.getElementById('checkout-direccion').required = tipoEntrega === 'domicilio';
+    const subtotal = cartData.reduce((sum, i) => sum + i.price * i.cantidad, 0);
+    const cargo = calcularCargoEntrega(tipoEntrega);
+    const preview = document.getElementById('checkout-total-preview');
+    if (preview) {
+      preview.textContent = cargo > 0
+        ? `Subtotal ${formatCurrency(subtotal)} + ${formatCurrency(cargo)} de entrega = ${formatCurrency(subtotal + cargo)}`
+        : `Total: ${formatCurrency(subtotal)}`;
+    }
+  }
+  document.getElementById('checkout-tipo-entrega').addEventListener('change', actualizarResumenEntrega);
 
   document.getElementById('cart-mini-badge').addEventListener('click', () => { cartExpanded = true; renderCart(); });
   document.getElementById('cart-toggle-btn').addEventListener('click', () => { cartExpanded = false; renderCart(); });
@@ -1268,6 +968,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (cartData.length === 0) return;
     document.getElementById('checkout-error-msg').textContent = '';
     document.getElementById('checkout-modal').classList.remove('hidden');
+    actualizarResumenEntrega();
   });
   document.getElementById('close-checkout-modal-btn').addEventListener('click', () => document.getElementById('checkout-modal').classList.add('hidden'));
   document.getElementById('order-confirmed-close-btn').addEventListener('click', () => document.getElementById('order-confirmed-modal').classList.add('hidden'));
@@ -1276,19 +977,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     e.preventDefault();
     if (!estaAbiertoAhora()) { alert("Estamos cerrados ahora mismo, no se pueden hacer pedidos."); return; }
     const day = document.getElementById('public-day-select').value;
-    const mealTime = document.getElementById('public-mealtime-select').value;
+    const tipoEntrega = document.getElementById('checkout-tipo-entrega').value;
     const payload = {
-      day, mealTime,
+      day,
+      tipoEntrega,
       cliente: {
         nombre: document.getElementById('checkout-nombre').value.trim(),
-        direccion: document.getElementById('checkout-direccion').value.trim(),
+        direccion: tipoEntrega === 'domicilio' ? document.getElementById('checkout-direccion').value.trim() : '',
         telefono: document.getElementById('checkout-telefono').value.trim(),
         nota: document.getElementById('checkout-nota').value.trim()
       },
       canal: 'pagina',
       metodoPago: document.getElementById('checkout-metodo-pago').value,
       menuMode,
-      items: cartData.map(i => ({ dishId: i.dishId, cantidad: i.cantidad, tipo: i.tipo, parentKey: i.parentKey, key: i.key, esDefault: !!i.esDefault, tamano: i.tamano || null, sourceDefaultDishId: i.sourceDefaultDishId || null }))
+      items: cartData.map(i => ({ dishId: i.dishId, cantidad: i.cantidad }))
     };
     try {
       const res = await fetch('api/place-order.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -1340,6 +1042,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await saveAllData();
     renderOrdersSection();
   };
+  const TIPO_ENTREGA_LABEL = { domicilio: 'A domicilio', recoger: 'Para recoger', comer_aqui: 'Comer aquí' };
   function renderOrdersSection() {
     const list = document.getElementById('orders-management-list');
     if (ordersData.length === 0) { list.innerHTML = '<p class="text-muted">Sin pedidos todavía.</p>'; return; }
@@ -1352,8 +1055,8 @@ document.addEventListener('DOMContentLoaded', async () => {
           <button class="btn-danger-sm" onclick="deleteOrder(${o.id})">Borrar</button>
         </div>
       </div>
-      <p class="text-muted">${o.day} · ${o.mealTime} · Tel: ${o.cliente.telefono} · Dir: ${o.cliente.direccion}${o.cliente.nota ? ' · Nota: ' + o.cliente.nota : ''}</p>
-      <div>${o.items.map(it => `<div class="preview-dish-item"><div>${it.tipo === 'acompanamiento' ? '+ ' : '• '}${it.cantidad} x ${it.name} — ${formatCurrency(it.precioUnitario * it.cantidad)}</div></div>`).join('')}</div>
+      <p class="text-muted">${TIPO_ENTREGA_LABEL[o.tipoEntrega] || o.tipoEntrega || ''} · Tel: ${o.cliente.telefono}${o.cliente.direccion ? ' · Dir: ' + o.cliente.direccion : ''}${o.cliente.nota ? ' · Nota: ' + o.cliente.nota : ''}</p>
+      <div>${o.items.map(it => `<div class="preview-dish-item"><div>• ${it.cantidad} x ${it.name} — ${formatCurrency(it.precioUnitario * it.cantidad)}</div></div>`).join('')}</div>
     </div>`).join('');
   }
 
