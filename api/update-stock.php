@@ -8,7 +8,11 @@ $file = dirname(__DIR__) . '/data/data.json';
 if (!file_exists($file)) { echo json_encode(['success' => false, 'error' => 'No hay datos']); exit; }
 
 $data = json_decode(file_get_contents($file), true);
-if (!isset($data['n8nConfig']['apiKey']) || $apiKey !== $data['n8nConfig']['apiKey']) {
+// La API Key vive de preferencia en la variable de entorno N8N_API_KEY; si
+// todavía no la configuraste ahí, cae al valor guardado en data.json como
+// respaldo (igual que get-menu.php, get-orders.php, etc.).
+$validKey = getenv('N8N_API_KEY') ?: ($data['n8nConfig']['apiKey'] ?? '');
+if (!$validKey || $apiKey !== $validKey) {
     http_response_code(401);
     echo json_encode(['success' => false, 'error' => 'API Key inválida']);
     exit;
