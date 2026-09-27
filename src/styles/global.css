@@ -99,7 +99,7 @@
 .social-float-stack {
   position: fixed;
   right: 20px;
-  bottom: 20px;
+  bottom: 100px;
   display: flex;
   flex-direction: column;
   gap: 12px;
