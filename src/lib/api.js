@@ -36,6 +36,30 @@ export async function getConfigStatus() {
   return res.json();
 }
 
+export async function verifyGoogleLogin(idToken) {
+  const res = await fetch('api/verify-google.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken }),
+  });
+  return res.json();
+}
+
+export async function fetchSession() {
+  const res = await fetch('api/me.php', { cache: 'no-store' });
+  return res.json();
+}
+
+export async function logoutSession() {
+  const res = await fetch('api/logout.php', { method: 'POST' });
+  return res.json();
+}
+
+export async function fetchMisPedidos() {
+  const res = await fetch('api/mis-pedidos.php', { cache: 'no-store' });
+  return res.json();
+}
+
 export function ensureObject(val, fallback) {
   if (val && typeof val === 'object' && !Array.isArray(val)) return val;
   return fallback;

@@ -1,11 +1,13 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link, useLocation } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 
 export default function NavBar({ onOpenLogin }) {
   const { state } = useData();
-  const { user, logout } = useAuth();
+  const { user, isAdmin, logout } = useAuth();
+  const location = useLocation();
   const branding = state?.brandingConfig || {};
+  const viewingAdmin = location.pathname.startsWith('/admin');
 
   return (
     <div className="nav-bar">
@@ -16,7 +18,7 @@ export default function NavBar({ onOpenLogin }) {
         </span>
       </div>
 
-      {!user && (
+      {!viewingAdmin && (
         <nav className="nav-links">
           <NavLink to="/" end className={({ isActive }) => (isActive ? 'active' : '')}>
             Inicio
@@ -32,6 +34,15 @@ export default function NavBar({ onOpenLogin }) {
 
       {user ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {isAdmin ? (
+            <Link to="/admin" className="btn-pill btn-orange" style={{ fontSize: 13, padding: '6px 14px', textDecoration: 'none' }}>
+              Administración
+            </Link>
+          ) : (
+            <Link to="/mi-cuenta" className="btn-pill btn-dark" style={{ fontSize: 13, padding: '6px 14px', textDecoration: 'none' }}>
+              Mi cuenta
+            </Link>
+          )}
           <span className="nav-user-email" style={{ fontSize: 12, color: '#e8b98a' }}>
             {user}
           </span>

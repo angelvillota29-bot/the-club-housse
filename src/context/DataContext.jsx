@@ -66,12 +66,12 @@ export function DataProvider({ children }) {
   const refresh = useCallback(async () => {
     try {
       const raw = await loadAllData();
-      const { state: normalized, changed } = normalize(raw);
+      // El reinicio diario de stock ya lo hace load-data.php del lado del
+      // servidor (antes se guardaba de vuelta desde el navegador de
+      // CUALQUIER visitante, pero save-data.php ahora exige sesión admin).
+      const { state: normalized } = normalize(raw);
       setState(normalized);
       setError(null);
-      if (changed) {
-        await saveAllData(normalized);
-      }
       return normalized;
     } catch (err) {
       setError(err);

@@ -1,5 +1,8 @@
 <?php
 header('Content-Type: application/json');
+require_once __DIR__ . '/_auth.php';
+requireRole('admin');
+
 $input = json_decode(file_get_contents('php://input'), true);
 $dataDir = dirname(__DIR__) . '/data';
 $file = $dataDir . '/data.json';

@@ -1,27 +1,50 @@
-import { createContext, useContext, useMemo, useState } from 'react';
-import { useData } from './DataContext';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { verifyGoogleLogin, fetchSession, logoutSession, getConfigStatus } from '../lib/api';
 
 const AuthContext = createContext(null);
-const SUPREME_ADMIN_EMAIL = 'angelvillota4@gmail.com';
 
 export function AuthProvider({ children }) {
-  const { state } = useData();
-  const [user, setUser] = useState(null);
+  const [session, setSession] = useState(null); // { email, role } | null
+  const [googleClientId, setGoogleClientId] = useState('');
+  const [ready, setReady] = useState(false);
 
-  const login = (email, password) => {
-    const trimmedEmail = email.trim();
-    const trimmedPassword = password.trim();
-    const match = state?.usersData?.find((u) => u.email === trimmedEmail && u.password === trimmedPassword);
-    if (match || (trimmedEmail === SUPREME_ADMIN_EMAIL && trimmedPassword === '1234')) {
-      setUser(trimmedEmail);
+  useEffect(() => {
+    Promise.all([fetchSession().catch(() => ({ success: false })), getConfigStatus().catch(() => ({}))]).then(
+      ([sessionRes, cfg]) => {
+        setSession(sessionRes.success ? { email: sessionRes.email, role: sessionRes.role } : null);
+        setGoogleClientId(cfg.googleClientId || '');
+        setReady(true);
+      },
+    );
+  }, []);
+
+  const loginWithGoogle = async (idToken) => {
+    const r = await verifyGoogleLogin(idToken);
+    if (r.success) {
+      setSession({ email: r.email, role: r.role });
       return true;
     }
     return false;
   };
 
-  const logout = () => setUser(null);
+  const logout = async () => {
+    await logoutSession().catch(() => {});
+    setSession(null);
+  };
 
-  const value = useMemo(() => ({ user, login, logout, isSuperAdmin: user === SUPREME_ADMIN_EMAIL }), [user]);
+  const value = useMemo(() => {
+    const role = session?.role || null;
+    return {
+      user: session?.email || null,
+      role,
+      isAdmin: role === 'admin' || role === 'superadmin',
+      isSuperAdmin: role === 'superadmin',
+      googleClientId,
+      ready,
+      loginWithGoogle,
+      logout,
+    };
+  }, [session, googleClientId, ready]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

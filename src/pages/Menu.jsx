@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
 import { useCart } from '../hooks/useCart';
 import { buildPublicMenu, isBusinessOpen } from '../lib/menu';
 import { formatCurrency, nombreDiaHoy } from '../lib/format';
@@ -13,6 +14,7 @@ const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', '
 
 export default function Menu() {
   const { state, refresh } = useData();
+  const { user } = useAuth();
   const location = useLocation();
   const cartState = useCart(state);
   const [day, setDay] = useState(nombreDiaHoy());
@@ -45,6 +47,7 @@ export default function Menu() {
       metodoPago,
       menuMode: state.menuMode,
       items: cartState.cart.map((i) => ({ dishId: i.dishId, cantidad: i.cantidad })),
+      accountEmail: user || undefined,
     };
     const result = await placeOrder(payload);
     if (result.success) {
