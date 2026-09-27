@@ -7,7 +7,7 @@ import Availability from './sections/Availability';
 import Customize from './sections/Customize';
 import Orders from './sections/Orders';
 import Users from './sections/Users';
-import ComingSoon from './sections/ComingSoon';
+import N8n from './sections/N8n';
 
 const TABS = [
   { key: 'categories', label: 'Categorías' },
@@ -49,7 +49,7 @@ export default function AdminDashboard() {
       {tab === 'customize' && <Customize />}
       {tab === 'orders' && <Orders />}
       {tab === 'users' && <Users />}
-      {tab === 'n8n' && <ComingSoon title="Conexión N8N" />}
+      {tab === 'n8n' && <N8n />}
     </div>
   );
 }
