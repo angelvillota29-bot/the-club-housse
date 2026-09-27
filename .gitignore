@@ -9,3 +9,11 @@
 # Basura común de editor / sistema operativo
 .DS_Store
 Thumbs.db
+
+# Build de la SPA de React
+node_modules/
+dist/
+
+# Skill de Impeccable (herramienta local, se reinstala igual que ui-ux-pro-max)
+.claude/skills/impeccable/
+.claude/agents/

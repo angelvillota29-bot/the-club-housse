@@ -1,0 +1,3 @@
+# SPA de React: cualquier ruta que no sea un archivo real (o /api, /uploads,
+# /data) cae a index.html, y React Router se encarga de mostrar la página.
+FallbackResource /index.html

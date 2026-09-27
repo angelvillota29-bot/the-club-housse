@@ -34,6 +34,7 @@ $metodoPago = ($input['metodoPago'] ?? '') === 'nequi' ? 'nequi' : 'efectivo';
 // empaque, sin dirección) · 'comer_aqui' (sin cargo, sin dirección).
 $tipoEntrega = in_array($input['tipoEntrega'] ?? '', ['domicilio', 'recoger', 'comer_aqui'], true) ? $input['tipoEntrega'] : 'domicilio';
 
+$accountEmail = !empty($input['accountEmail']) ? strtolower(trim($input['accountEmail'])) : null;
 $nombre = trim($cliente['nombre'] ?? '');
 $direccion = $tipoEntrega === 'domicilio' ? trim($cliente['direccion'] ?? '') : '';
 $telefono = trim($cliente['telefono'] ?? '');
@@ -192,6 +193,7 @@ $order = [
     'estado' => 'pendiente',
     'canal' => $canal,
     'metodoPago' => $metodoPago,
+    'accountEmail' => $accountEmail,
 ];
 $data['ordersData'][] = $order;
 // Registro PERMANENTE: a diferencia de ordersData (la cola de cocina, que se
