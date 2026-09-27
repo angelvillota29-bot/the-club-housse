@@ -8,12 +8,7 @@ export default function Home() {
   return (
     <div>
       <div className="hero-band">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div className="badge-logo" style={{ width: 52, height: 52 }}>
-            {branding.logoUrl ? <img src={branding.logoUrl} alt="Logo" /> : 'HOUSSE'}
-          </div>
-        </div>
-        <div style={{ marginTop: 18 }}>
+        <div style={{ marginTop: 4 }}>
           <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 32, color: '#fff', lineHeight: 1.05 }}>
             ¿Hoy qué
             <br />
