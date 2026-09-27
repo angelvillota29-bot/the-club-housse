@@ -11,12 +11,12 @@ export default function NavBar({ onOpenLogin }) {
 
   return (
     <div className="nav-bar">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <Link to="/menu" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
         <div className="badge-logo">{branding.logoUrl ? <img src={branding.logoUrl} alt="Logo" /> : 'HOUSSE'}</div>
         <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: '#fff', fontSize: 16 }}>
           {branding.name || 'The Club Housse'}
         </span>
-      </div>
+      </Link>
 
       {!viewingAdmin && (
         <nav className="nav-links">
