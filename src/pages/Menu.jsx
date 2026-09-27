@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { useCart } from '../hooks/useCart';
 import { buildPublicMenu, isBusinessOpen } from '../lib/menu';
@@ -12,6 +13,7 @@ const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', '
 
 export default function Menu() {
   const { state, refresh } = useData();
+  const location = useLocation();
   const cartState = useCart(state);
   const [day, setDay] = useState(nombreDiaHoy());
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -135,7 +137,14 @@ export default function Menu() {
         />
       )}
 
-      {checkoutOpen && <CheckoutModal totalsForEntrega={cartState.totalsForEntrega} onClose={() => setCheckoutOpen(false)} onSubmit={submitOrder} />}
+      {checkoutOpen && (
+        <CheckoutModal
+          totalsForEntrega={cartState.totalsForEntrega}
+          initialTipoEntrega={location.state?.tipoEntrega}
+          onClose={() => setCheckoutOpen(false)}
+          onSubmit={submitOrder}
+        />
+      )}
 
       {confirmedOrder && (
         <div style={overlayStyle}>

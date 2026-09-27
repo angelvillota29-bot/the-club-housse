@@ -21,9 +21,19 @@ export default function Home() {
           </div>
           <div style={{ marginTop: 8, fontSize: 13, color: '#e8b98a' }}>{branding.name || 'The Club Housse'} · Comidas Rápidas</div>
         </div>
-        <Link to="/menu" className="btn-pill btn-orange" style={{ marginTop: 16, display: 'inline-block', textDecoration: 'none' }}>
-          Ver el menú de hoy →
-        </Link>
+        <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+          <Link to="/menu" className="btn-pill btn-orange" style={{ display: 'inline-block', textDecoration: 'none' }}>
+            Ver el menú de hoy →
+          </Link>
+          <Link
+            to="/menu"
+            state={{ tipoEntrega: 'domicilio' }}
+            className="btn-pill"
+            style={{ display: 'inline-block', textDecoration: 'none', background: 'transparent', border: '2px solid var(--brand-cream)', color: 'var(--brand-cream)' }}
+          >
+            Haz tu pedido ya
+          </Link>
+        </div>
       </div>
 
       <div style={{ padding: '20px', maxWidth: 640, margin: '0 auto' }}>
@@ -33,9 +43,15 @@ export default function Home() {
         </p>
 
         <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-          <div className="chip-tab" style={{ pointerEvents: 'none' }}>Domicilio</div>
-          <div className="chip-tab" style={{ pointerEvents: 'none' }}>Recoger</div>
-          <div className="chip-tab" style={{ pointerEvents: 'none' }}>Comer aquí</div>
+          <Link to="/menu" state={{ tipoEntrega: 'domicilio' }} className="chip-tab" style={{ textDecoration: 'none' }}>
+            Domicilio
+          </Link>
+          <Link to="/menu" state={{ tipoEntrega: 'recoger' }} className="chip-tab" style={{ textDecoration: 'none' }}>
+            Recoger
+          </Link>
+          <Link to="/menu" state={{ tipoEntrega: 'comer_aqui' }} className="chip-tab" style={{ textDecoration: 'none' }}>
+            Comer aquí
+          </Link>
         </div>
       </div>
     </div>

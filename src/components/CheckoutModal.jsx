@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 import { formatCurrency } from '../lib/format';
 import TermsButton from './TermsButton';
 
-export default function CheckoutModal({ totalsForEntrega, onClose, onSubmit }) {
-  const [tipoEntrega, setTipoEntrega] = useState('domicilio');
+export default function CheckoutModal({ totalsForEntrega, onClose, onSubmit, initialTipoEntrega }) {
+  const [tipoEntrega, setTipoEntrega] = useState(initialTipoEntrega || 'domicilio');
   const [metodoPago, setMetodoPago] = useState('efectivo');
   const [form, setForm] = useState({ nombre: '', direccion: '', telefono: '', nota: '' });
   const [acceptedTerms, setAcceptedTerms] = useState(false);
