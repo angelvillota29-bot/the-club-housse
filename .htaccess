@@ -1,3 +1,11 @@
 # SPA de React: cualquier ruta que no sea un archivo real (o /api, /uploads,
 # /data) cae a index.html, y React Router se encarga de mostrar la página.
 FallbackResource /index.html
+
+# Headers de seguridad básicos -- no rompen nada (no es un CSP estricto, que
+# podría bloquear el widget de Forja o el botón de Google sin darse cuenta).
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>

@@ -14,6 +14,10 @@ Thumbs.db
 node_modules/
 dist/
 
+# Resultados de las pruebas de Playwright
+test-results/
+playwright-report/
+
 # Skill de Impeccable (herramienta local, se reinstala igual que ui-ux-pro-max)
 .claude/skills/impeccable/
 .claude/agents/

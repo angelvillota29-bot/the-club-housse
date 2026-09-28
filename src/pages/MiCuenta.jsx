@@ -1,18 +1,40 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { fetchMisPedidos } from '../lib/api';
+import { fetchMisPedidos, eliminarCuenta } from '../lib/api';
 import { formatCurrency } from '../lib/format';
 
 export default function MiCuenta() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetchMisPedidos()
       .then((r) => setData(r.success ? r : { pedidos: [], favoritos: [] }))
       .finally(() => setLoading(false));
   }, []);
+
+  const handleDelete = async () => {
+    if (
+      !confirm(
+        'Esto elimina tu cuenta: se borran tu nombre, dirección y teléfono de tu historial de pedidos, y pierdes el acceso con este correo. Si tienes un pedido en camino ahora mismo, complétalo primero. ¿Continuar?',
+      )
+    )
+      return;
+    setDeleting(true);
+    const r = await eliminarCuenta();
+    setDeleting(false);
+    if (r.success) {
+      alert('Tu cuenta fue eliminada.');
+      await logout();
+      navigate('/');
+    } else {
+      alert('No se pudo eliminar tu cuenta: ' + (r.error || 'error desconocido'));
+    }
+  };
 
   return (
     <div style={{ padding: '20px 20px 60px', maxWidth: 640, margin: '0 auto' }}>
@@ -63,9 +85,19 @@ export default function MiCuenta() {
         </>
       )}
 
-      <button className="btn-pill btn-dark" style={{ marginTop: 28 }} onClick={logout}>
-        Cerrar sesión
-      </button>
+      <div style={{ display: 'flex', gap: 10, marginTop: 28, flexWrap: 'wrap' }}>
+        <button className="btn-pill btn-dark" onClick={logout}>
+          Cerrar sesión
+        </button>
+        <button
+          className="btn-pill"
+          style={{ background: 'transparent', border: '2px solid var(--brand-danger)', color: 'var(--brand-danger)' }}
+          disabled={deleting}
+          onClick={handleDelete}
+        >
+          {deleting ? 'Eliminando…' : 'Eliminar mi cuenta'}
+        </button>
+      </div>
     </div>
   );
 }

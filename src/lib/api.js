@@ -60,6 +60,11 @@ export async function fetchMisPedidos() {
   return res.json();
 }
 
+export async function eliminarCuenta() {
+  const res = await fetch('api/eliminar-cuenta.php', { method: 'POST' });
+  return res.json();
+}
+
 export function ensureObject(val, fallback) {
   if (val && typeof val === 'object' && !Array.isArray(val)) return val;
   return fallback;

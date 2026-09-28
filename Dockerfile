@@ -10,7 +10,7 @@ RUN npm run build
 # Etapa 2: PHP + Apache sirve el build estático y la API PHP existente.
 FROM php:8.2-apache
 RUN sed -i 's/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf \
-    && a2enmod rewrite
+    && a2enmod rewrite headers
 
 COPY --from=build /app/dist/ /var/www/html/
 COPY api/ /var/www/html/api/

@@ -52,7 +52,13 @@ export default function TermsButton({ inline, onClose: onCloseProp }) {
               </p>
               <p>
                 <strong>7. Chat y bots.</strong> Si pides a través de nuestro chatbot, este es el mismo documento que el bot te
-                pide aceptar antes de confirmar tu pedido.
+                pide aceptar antes de confirmar tu pedido. Ese chat lo atiende un asistente de inteligencia artificial, no una
+                persona.
+              </p>
+              <p>
+                <strong>8. Tu cuenta.</strong> Iniciar sesión con Google es opcional. Si lo haces, puedes eliminar tu cuenta
+                cuando quieras desde "Mi cuenta" — ver el botón "Tus datos" para el detalle de qué se guarda y con quién se
+                comparte.
               </p>
             </div>
           </div>
