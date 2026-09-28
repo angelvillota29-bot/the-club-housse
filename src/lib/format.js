@@ -1,6 +1,7 @@
 export function formatCurrency(input) {
   const digits = String(input).replace(/\D/g, '');
-  return `$ ${parseInt(digits || '0', 10).toLocaleString('es-CO')}`;
+  // Espacio irrompible: evita que "$" y el número queden en líneas separadas.
+  return `$ ${parseInt(digits || '0', 10).toLocaleString('es-CO')}`;
 }
 
 export function parseCurrencyNumber(formatted) {

@@ -7,7 +7,6 @@ import { buildPublicMenu, isBusinessOpen } from '../lib/menu';
 import { formatCurrency, nombreDiaHoy } from '../lib/format';
 import CartPanel from '../components/CartPanel';
 import CheckoutModal from '../components/CheckoutModal';
-import UpsellModal from '../components/UpsellModal';
 import { placeOrder } from '../lib/api';
 
 const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
@@ -20,22 +19,15 @@ export default function Menu() {
   const [day, setDay] = useState(nombreDiaHoy());
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [confirmedOrder, setConfirmedOrder] = useState(null);
-  const [upsell, setUpsell] = useState(null);
 
   const esUnico = state.menuMode === 'unico';
   const esHoy = esUnico || day === nombreDiaHoy();
   const open = isBusinessOpen(state.businessOpenConfig);
 
   const groups = useMemo(() => buildPublicMenu(state, day, 'recoger'), [state, day]);
-  const allAvailableDishes = useMemo(() => groups.flatMap((g) => g.dishes).filter((d) => !d.isSoldOut), [groups]);
 
   const handleAdd = (dishId) => {
-    const dish = allAvailableDishes.find((d) => d.id === dishId);
     cartState.addToCart(dishId, day);
-    const others = allAvailableDishes.filter((d) => d.id !== dishId && !cartState.cart.some((c) => c.dishId === d.id)).slice(0, 3);
-    if (dish && others.length > 0) {
-      setUpsell({ addedName: dish.name, suggestions: others });
-    }
   };
 
   const submitOrder = async ({ nombre, direccion, telefono, nota, tipoEntrega, metodoPago }) => {
@@ -104,8 +96,9 @@ export default function Menu() {
                 <div key={dish.id} className="dish-card" style={{ opacity: dish.isSoldOut ? 0.5 : 1 }}>
                   {dish.imageUrl ? <img src={dish.imageUrl} alt={dish.name} /> : <div className="dish-img-placeholder" />}
                   <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13, color: 'var(--brand-text-dark)' }}>{dish.name}</div>
+                  {dish.desc && <div style={{ fontSize: 11, color: '#a68f78', marginTop: 2 }}>{dish.desc}</div>}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-                    <span style={{ color: 'var(--brand-orange)', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 13 }}>
+                    <span style={{ color: 'var(--brand-orange)', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 13, whiteSpace: 'nowrap' }}>
                       {formatCurrency(dish.priceWithFees)}
                     </span>
                     {!dish.isSoldOut && esHoy && open && (
@@ -123,22 +116,6 @@ export default function Menu() {
       </div>
 
       <CartPanel cart={cartState.cart} subtotal={cartState.subtotal} onQty={cartState.changeQty} onRemove={cartState.removeItem} onCheckout={() => setCheckoutOpen(true)} />
-
-      {upsell && (
-        <UpsellModal
-          addedName={upsell.addedName}
-          suggestions={upsell.suggestions}
-          onAdd={(dishId) => {
-            cartState.addToCart(dishId, day);
-            setUpsell(null);
-          }}
-          onClose={() => setUpsell(null)}
-          onCheckout={() => {
-            setUpsell(null);
-            setCheckoutOpen(true);
-          }}
-        />
-      )}
 
       {checkoutOpen && (
         <CheckoutModal
