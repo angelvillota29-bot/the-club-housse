@@ -2,6 +2,15 @@
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
+require_once __DIR__ . '/_auth.php';
+// Este endpoint es público (lo llama cualquier visitante para ver el menú),
+// así que NO puede exigir sesión -- pero antes devolvía data.json COMPLETO
+// a cualquiera, incluyendo usersData, la API key de n8n, el historial de
+// pedidos (nombres/direcciones/teléfonos de clientes) y la config de avisos.
+// Solo un admin de verdad recibe el objeto completo (lo necesita para que
+// save-data.php pueda sobrescribirlo tal cual, sin perder esos campos).
+$session = readSession();
+$isAdmin = $session && (ROLE_LEVEL[$session['role']] ?? 0) >= ROLE_LEVEL['admin'];
 $file = dirname(__DIR__) . '/data/data.json';
 if (!file_exists($file)) {
     echo json_encode(['categories' => [], 'dishes' => [], 'schedule' => [], 'takeoutConfig' => ['enabled' => false, 'fee' => 0], 'brandingConfig' => [], 'usersData' => [], 'n8nConfig' => ['apiKey' => '']]);
@@ -47,6 +56,10 @@ if (isset($data['singleMenuSchedule']) && is_array($data['singleMenuSchedule']))
 
 if ($cambio) {
     @file_put_contents($file, json_encode($data));
+}
+
+if (!$isAdmin) {
+    unset($data['usersData'], $data['n8nConfig'], $data['ordersData'], $data['notifyConfig'], $data['historialPedidos']);
 }
 
 echo json_encode($data);

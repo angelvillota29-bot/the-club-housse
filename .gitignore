@@ -5,6 +5,7 @@
 /data/
 /uploads/*
 !/uploads/.gitkeep
+!/uploads/.htaccess
 
 # Basura común de editor / sistema operativo
 .DS_Store

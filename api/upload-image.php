@@ -27,14 +27,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image'])) {
     $mime = finfo_file($finfo, $file['tmp_name']);
     finfo_close($finfo);
 
-    if (!in_array($mime, $allowedTypes)) {
+    // La extensión sale del tipo MIME YA VALIDADO, nunca del nombre que
+    // manda el navegador -- si no, alguien podría subir un archivo con
+    // magic bytes de imagen válida pero nombre "foto.php" y quedaría
+    // ejecutable dentro de /uploads.
+    $extensionsByMime = ['image/jpeg' => 'jpg', 'image/jpg' => 'jpg', 'image/png' => 'png'];
+    if (!isset($extensionsByMime[$mime])) {
         http_response_code(400);
         echo json_encode(['error' => 'Solo se permiten imágenes JPG, JPEG o PNG']);
         exit;
     }
 
     // Generar nombre único
-    $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+    $extension = $extensionsByMime[$mime];
     $newName = uniqid() . '.' . $extension;
     $destPath = $uploadDir . $newName;
 

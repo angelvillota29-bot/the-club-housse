@@ -1,0 +1,10 @@
+# Esta carpeta solo debe servir imágenes subidas por el admin. Aunque
+# upload-image.php ya valida el tipo real del archivo antes de guardarlo,
+# esto es una segunda capa: ni PHP ni ningún otro script se ejecuta aquí,
+# pase lo que pase.
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+<FilesMatch "\.(php|php\d|phtml|pl|py|cgi|sh)$">
+    Require all denied
+</FilesMatch>
