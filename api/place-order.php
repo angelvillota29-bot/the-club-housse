@@ -40,7 +40,7 @@ $direccion = $tipoEntrega === 'domicilio' ? trim($cliente['direccion'] ?? '') : 
 $telefono = trim($cliente['telefono'] ?? '');
 $nota = trim($cliente['nota'] ?? '');
 
-if (($menuMode === 'semanal' && !$day) || $nombre === '' || $telefono === '' || empty($items) || ($tipoEntrega === 'domicilio' && $direccion === '')) {
+if (($menuMode === 'semanal' && !$day) || $nombre === '' || ($tipoEntrega !== 'comer_aqui' && $telefono === '') || empty($items) || ($tipoEntrega === 'domicilio' && $direccion === '')) {
     http_response_code(400);
     echo json_encode(['success' => false, 'error' => 'Faltan datos del pedido (nombre, dirección, teléfono o platillos)']);
     exit;
@@ -221,7 +221,8 @@ if ($resendKey && $ownerEmail) {
     }
     $tipoEntregaLabel = ['domicilio' => 'A domicilio', 'recoger' => 'Para recoger', 'comer_aqui' => 'Comer aquí'][$tipoEntrega] ?? $tipoEntrega;
     $html = "<h2>Nuevo pedido #{$orderId}</h2>" .
-        "<p><b>Cliente:</b> {$nombre}<br><b>Teléfono:</b> {$telefono}" .
+        "<p><b>Cliente:</b> {$nombre}" .
+        ($telefono !== '' ? "<br><b>Teléfono:</b> {$telefono}" : '') .
         ($direccion !== '' ? "<br><b>Dirección:</b> {$direccion}" : '') .
         ($nota !== '' ? "<br><b>Nota:</b> {$nota}" : '') . '</p>' .
         "<p><b>Entrega:</b> {$tipoEntregaLabel}</p>" .

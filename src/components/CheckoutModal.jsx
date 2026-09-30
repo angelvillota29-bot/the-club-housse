@@ -14,6 +14,7 @@ export default function CheckoutModal({ totalsForEntrega, onClose, onSubmit, ini
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
   const totals = useMemo(() => totalsForEntrega(tipoEntrega), [totalsForEntrega, tipoEntrega]);
   const needsAddress = tipoEntrega === 'domicilio';
+  const needsPhone = tipoEntrega !== 'comer_aqui';
 
   const submit = async (e) => {
     e.preventDefault();
@@ -61,10 +62,12 @@ export default function CheckoutModal({ totalsForEntrega, onClose, onSubmit, ini
               <input required value={form.direccion} onChange={set('direccion')} style={inputStyle} />
             </label>
           )}
-          <label style={labelStyle}>
-            Teléfono
-            <input required type="tel" value={form.telefono} onChange={set('telefono')} style={inputStyle} />
-          </label>
+          {needsPhone && (
+            <label style={labelStyle}>
+              Teléfono
+              <input required type="tel" value={form.telefono} onChange={set('telefono')} style={inputStyle} />
+            </label>
+          )}
           <label style={labelStyle}>
             Nota (opcional)
             <input value={form.nota} onChange={set('nota')} placeholder="Ej. sin cebolla" style={inputStyle} />
