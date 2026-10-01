@@ -8,3 +8,8 @@
 <FilesMatch "\.(php|php\d|phtml|pl|py|cgi|sh)$">
     Require all denied
 </FilesMatch>
+
+# Refuerza explícitamente (ya lo hereda del .htaccess raíz) que no se liste
+# el contenido de esta carpeta: evitaría enumerar los nombres de todas las
+# imágenes subidas.
+Options -Indexes

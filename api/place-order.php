@@ -4,6 +4,9 @@
 // único), descuenta el stock, guarda el pedido en ordersData, y si hay
 // notifyConfig configurado, avisa al dueño por correo (Resend). No requiere
 // API Key: lo llama el navegador del cliente, igual que save-data.php.
+require_once __DIR__ . '/_auth.php';
+require_once __DIR__ . '/_ratelimit.php';
+
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 date_default_timezone_set('America/Bogota');
@@ -22,6 +25,22 @@ if (!$input) {
     exit;
 }
 
+// El correo de la cuenta se toma SOLO de la sesión autenticada del servidor
+// (nunca de lo que mande el navegador) -- así un pedido jamás puede quedar
+// atribuido a una cuenta que no sea la que realmente inició sesión.
+$session = readSession();
+$accountEmail = $session['email'] ?? null;
+
+// Límite anti-inundación: solo para clientes normales (sin sesión, o con
+// cuenta de Google pero sin rol especial) -- un mesero (o un admin) queda
+// exento, ya que no tendría sentido limitarlos al tomar pedidos en el local.
+$rolActual = ROLE_LEVEL[$session['role'] ?? ''] ?? 0;
+if ($rolActual < ROLE_LEVEL['mesero'] && !dentroDelLimite('order:' . clientIp(), 10, 60)) {
+    http_response_code(429);
+    echo json_encode(['success' => false, 'error' => 'Se están recibiendo demasiados pedidos desde aquí en muy poco tiempo. Espera un momento e intenta de nuevo.']);
+    exit;
+}
+
 $menuMode = ($input['menuMode'] ?? 'semanal') === 'unico' ? 'unico' : 'semanal';
 $day = $input['day'] ?? null;
 $cliente = $input['cliente'] ?? [];
@@ -34,7 +53,6 @@ $metodoPago = ($input['metodoPago'] ?? '') === 'nequi' ? 'nequi' : 'efectivo';
 // empaque, sin dirección) · 'comer_aqui' (sin cargo, sin dirección).
 $tipoEntrega = in_array($input['tipoEntrega'] ?? '', ['domicilio', 'recoger', 'comer_aqui'], true) ? $input['tipoEntrega'] : 'domicilio';
 
-$accountEmail = !empty($input['accountEmail']) ? strtolower(trim($input['accountEmail'])) : null;
 $nombre = trim($cliente['nombre'] ?? '');
 $direccion = $tipoEntrega === 'domicilio' ? trim($cliente['direccion'] ?? '') : '';
 $telefono = trim($cliente['telefono'] ?? '');
@@ -220,11 +238,19 @@ if ($resendKey && $ownerEmail) {
         $itemsHtml .= $it['cantidad'] . ' x ' . $it['name'] . ' - $' . number_format($it['precioUnitario'] * $it['cantidad'], 0, ',', '.') . '<br>';
     }
     $tipoEntregaLabel = ['domicilio' => 'A domicilio', 'recoger' => 'Para recoger', 'comer_aqui' => 'Comer aquí'][$tipoEntrega] ?? $tipoEntrega;
+    // Los datos del cliente vienen sin autenticar: se escapan solo aquí, al
+    // interpolarlos en el HTML del correo, para no inyectar <img>/<a>/etc. en
+    // el aviso que recibe el dueño. El valor crudo sigue guardándose tal cual
+    // en ordersData/historialPedidos para el panel de admin y el ticket.
+    $nombreHtml = htmlspecialchars($nombre, ENT_QUOTES, 'UTF-8');
+    $telefonoHtml = htmlspecialchars($telefono, ENT_QUOTES, 'UTF-8');
+    $direccionHtml = htmlspecialchars($direccion, ENT_QUOTES, 'UTF-8');
+    $notaHtml = htmlspecialchars($nota, ENT_QUOTES, 'UTF-8');
     $html = "<h2>Nuevo pedido #{$orderId}</h2>" .
-        "<p><b>Cliente:</b> {$nombre}" .
-        ($telefono !== '' ? "<br><b>Teléfono:</b> {$telefono}" : '') .
-        ($direccion !== '' ? "<br><b>Dirección:</b> {$direccion}" : '') .
-        ($nota !== '' ? "<br><b>Nota:</b> {$nota}" : '') . '</p>' .
+        "<p><b>Cliente:</b> {$nombreHtml}" .
+        ($telefono !== '' ? "<br><b>Teléfono:</b> {$telefonoHtml}" : '') .
+        ($direccion !== '' ? "<br><b>Dirección:</b> {$direccionHtml}" : '') .
+        ($nota !== '' ? "<br><b>Nota:</b> {$notaHtml}" : '') . '</p>' .
         "<p><b>Entrega:</b> {$tipoEntregaLabel}</p>" .
         "<p><b>Pedido:</b><br>{$itemsHtml}</p>" .
         '<p><b>Total: $' . number_format($total, 0, ',', '.') . '</b></p>';

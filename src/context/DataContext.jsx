@@ -48,6 +48,11 @@ function normalize(raw) {
       n8nConfig: ensureObject(raw.n8nConfig, { apiKey: '' }),
       ordersData: raw.ordersData || [],
       notifyConfig: ensureObject(raw.notifyConfig, { resendApiKey: '', ownerEmail: '' }),
+      // Nunca se edita desde aquí (eso lo hace set-mesero-credentials.php) --
+      // solo necesita viajar de ida y vuelta en cada guardado para que un
+      // guardado normal (editar platillos, etc.) no la borre de disco, igual
+      // que n8nConfig/notifyConfig.
+      meseroAuth: ensureObject(raw.meseroAuth, { usuario: '', passwordHash: '' }),
       // Nunca se edita desde este panel, pero save-data.php SOBRESCRIBE
       // data.json entero (no hace merge) -- si no la reenviamos tal cual en
       // cada guardado, cualquier acción de admin borraría el historial

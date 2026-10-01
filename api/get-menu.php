@@ -24,7 +24,7 @@ if (preg_match('/Bearer\s+(.+)/i', $authHeader, $m)) $providedKey = trim($m[1]);
 // no la configuraste ahí, cae al valor guardado en data.json como respaldo.
 $validKey = getenv('N8N_API_KEY') ?: ($data['n8nConfig']['apiKey'] ?? '');
 
-if (!$validKey || $providedKey !== $validKey) {
+if (!$validKey || !hash_equals($validKey, $providedKey)) {
     http_response_code(401);
     echo json_encode(['success' => false, 'error' => 'API Key inválida']);
     exit;

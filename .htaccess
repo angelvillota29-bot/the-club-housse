@@ -2,6 +2,13 @@
 # /data) cae a index.html, y React Router se encarga de mostrar la página.
 FallbackResource /index.html
 
+# Apaga el listado de directorios heredado del apache2.conf base (Options
+# Indexes FollowSymLinks). Con "-Indexes" se combina con lo ya configurado
+# en vez de reemplazarlo, así que FollowSymLinks sigue intacto. Esto aplica
+# a todo /var/www/html, incluyendo /api y /uploads, por herencia normal de
+# .htaccess salvo que un .htaccess hijo lo reemplace sin +/-.
+Options -Indexes
+
 # Headers de seguridad básicos -- no rompen nada (no es un CSP estricto, que
 # podría bloquear el widget de Forja o el botón de Google sin darse cuenta).
 <IfModule mod_headers.c>

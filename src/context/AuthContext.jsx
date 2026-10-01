@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { verifyGoogleLogin, fetchSession, logoutSession, getConfigStatus } from '../lib/api';
+import { verifyGoogleLogin, fetchSession, logoutSession, getConfigStatus, loginMesero as loginMeseroApi } from '../lib/api';
 
 const AuthContext = createContext(null);
 
@@ -27,6 +27,15 @@ export function AuthProvider({ children }) {
     return false;
   };
 
+  const loginMesero = async (usuario, clave) => {
+    const r = await loginMeseroApi(usuario, clave);
+    if (r.success) {
+      setSession({ email: r.email, role: r.role });
+      return { ok: true };
+    }
+    return { ok: false, error: r.error || 'No se pudo iniciar sesión' };
+  };
+
   const logout = async () => {
     await logoutSession().catch(() => {});
     setSession(null);
@@ -39,9 +48,11 @@ export function AuthProvider({ children }) {
       role,
       isAdmin: role === 'admin' || role === 'superadmin',
       isSuperAdmin: role === 'superadmin',
+      isMesero: role === 'mesero',
       googleClientId,
       ready,
       loginWithGoogle,
+      loginMesero,
       logout,
     };
   }, [session, googleClientId, ready]);

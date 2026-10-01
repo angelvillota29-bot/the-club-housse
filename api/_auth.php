@@ -2,16 +2,29 @@
 // Sesión basada en Google Sign-In, sin base de datos de sesiones: la cookie
 // guarda {email, role, exp} firmado con HMAC-SHA256 (SESSION_SECRET), igual
 // de "sin infraestructura extra" que el resto del sistema (archivos planos).
-// role: 'cliente' (cualquier cuenta de Google) | 'admin' (correo en
-// usersData) | 'superadmin' (SUPREME_ADMIN_EMAIL).
+// role: 'cliente' (cualquier cuenta de Google) | 'mesero' (usuario/clave
+// compartidos, ver login-mesero.php -- no puede alterar nada, solo queda
+// exento del límite de pedidos) | 'admin' (correo en usersData) |
+// 'superadmin' (SUPREME_ADMIN_EMAIL). El campo 'email' de la sesión de un
+// mesero en realidad guarda su nombre de usuario, no un correo real.
 
 const SESSION_COOKIE = 'housse_session';
 const SESSION_TTL = 60 * 60 * 24 * 30; // 30 días
 const SUPREME_ADMIN_EMAIL = 'angelvillota4@gmail.com';
-const ROLE_LEVEL = ['cliente' => 1, 'admin' => 2, 'superadmin' => 3];
+const ROLE_LEVEL = ['cliente' => 1, 'mesero' => 2, 'admin' => 3, 'superadmin' => 4];
 
 function sessionSecret() {
-    return getenv('SESSION_SECRET') ?: 'housse-dev-secret-cambia-esto-en-easypanel';
+    $secret = getenv('SESSION_SECRET');
+    if (!$secret) {
+        // No hay fallback: firmar/verificar sesiones con un secreto que
+        // cualquiera puede leer en el código fuente público permitiría
+        // forjar cookies de superadmin. Fallamos cerrado hasta que se
+        // provisione un secreto real en el entorno.
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Configuración del servidor incompleta: falta SESSION_SECRET.']);
+        exit;
+    }
+    return $secret;
 }
 
 function issueSession($email, $role) {

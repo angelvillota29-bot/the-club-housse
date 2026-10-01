@@ -45,6 +45,24 @@ export async function verifyGoogleLogin(idToken) {
   return res.json();
 }
 
+export async function loginMesero(usuario, clave) {
+  const res = await fetch('api/login-mesero.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ usuario, clave }),
+  });
+  return res.json();
+}
+
+export async function setMeseroCredentials(usuario, clave) {
+  const res = await fetch('api/set-mesero-credentials.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ usuario, clave }),
+  });
+  return res.json();
+}
+
 export async function fetchSession() {
   const res = await fetch('api/me.php', { cache: 'no-store' });
   return res.json();

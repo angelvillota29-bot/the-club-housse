@@ -8,9 +8,17 @@ require_once __DIR__ . '/_auth.php';
 // a cualquiera, incluyendo usersData, la API key de n8n, el historial de
 // pedidos (nombres/direcciones/teléfonos de clientes) y la config de avisos.
 // Solo un admin de verdad recibe el objeto completo (lo necesita para que
-// save-data.php pueda sobrescribirlo tal cual, sin perder esos campos).
+// save-data.php pueda sobrescribirlo tal cual, sin perder esos campos),
+// excepto n8nConfig/notifyConfig (credenciales reales) que solo van a
+// superadmin -- save-data.php conserva esos dos campos tal cual estén en
+// disco cuando quien guarda es un admin no-superadmin.
 $session = readSession();
 $isAdmin = $session && (ROLE_LEVEL[$session['role']] ?? 0) >= ROLE_LEVEL['admin'];
+// n8nConfig/notifyConfig cargan credenciales reales (API key de n8n, API key
+// de Resend): un admin normal (no superadmin) tiene esas pestañas ocultas en
+// el panel, pero sin este chequeo igual las recibía en el payload y podía
+// leerlas desde DevTools. Solo superadmin debe ver estos dos objetos.
+$isSuperAdmin = $session && ($session['role'] ?? '') === 'superadmin';
 $file = dirname(__DIR__) . '/data/data.json';
 if (!file_exists($file)) {
     echo json_encode(['categories' => [], 'dishes' => [], 'schedule' => [], 'takeoutConfig' => ['enabled' => false, 'fee' => 0], 'brandingConfig' => [], 'usersData' => [], 'n8nConfig' => ['apiKey' => '']]);
@@ -59,7 +67,9 @@ if ($cambio) {
 }
 
 if (!$isAdmin) {
-    unset($data['usersData'], $data['n8nConfig'], $data['ordersData'], $data['notifyConfig'], $data['historialPedidos']);
+    unset($data['usersData'], $data['n8nConfig'], $data['ordersData'], $data['notifyConfig'], $data['historialPedidos'], $data['meseroAuth']);
+} elseif (!$isSuperAdmin) {
+    unset($data['n8nConfig'], $data['notifyConfig'], $data['meseroAuth']);
 }
 
 echo json_encode($data);

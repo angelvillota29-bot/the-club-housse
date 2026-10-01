@@ -1,5 +1,11 @@
 import { useData } from '../context/DataContext';
 
+// Only allow http(s) URLs to be used as href values. Rejects javascript:,
+// data:, and any other scheme that could be used for XSS via an <a href>.
+function isSafeHttpUrl(value) {
+  return typeof value === 'string' && /^https?:\/\//i.test(value.trim());
+}
+
 export default function SocialFloat() {
   const { state } = useData();
   const branding = state?.brandingConfig || {};
@@ -15,7 +21,7 @@ export default function SocialFloat() {
       viewBox: '0 0 448 512',
     });
   }
-  if (branding.telegramUrl) {
+  if (isSafeHttpUrl(branding.telegramUrl)) {
     items.push({
       key: 'telegram',
       cls: 'telegram',
@@ -25,7 +31,7 @@ export default function SocialFloat() {
       viewBox: '0 0 496 512',
     });
   }
-  if (branding.xUrl) {
+  if (isSafeHttpUrl(branding.xUrl)) {
     items.push({
       key: 'x',
       cls: 'x',
@@ -35,7 +41,7 @@ export default function SocialFloat() {
       viewBox: '0 0 512 512',
     });
   }
-  if (branding.instagramUrl) {
+  if (isSafeHttpUrl(branding.instagramUrl)) {
     items.push({
       key: 'instagram',
       cls: 'instagram',
