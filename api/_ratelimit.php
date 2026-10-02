@@ -11,12 +11,22 @@
 // extrema que arriesgarse a tumbar el sitio por esto, que es solo una capa
 // extra de protección, no el único control.
 
+// IP real del visitante. El sitio corre detrás del proxy de EasyPanel
+// (Traefik), que AGREGA la IP real al FINAL de X-Forwarded-For. Lo que viene
+// antes lo escribe el propio visitante y se puede falsificar, así que se
+// toma la ÚLTIMA entrada válida (nunca la primera: con la primera bastaba
+// mandar una cabecera falsa distinta en cada petición para saltarse el
+// límite de pedidos y el de intentos de login).
+// Si algún día el sitio queda detrás de Cloudflare además de Traefik, la
+// última entrada sería la de Cloudflare y habría que ajustar esto.
 function clientIp() {
     $fwd = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '';
-    if ($fwd) {
-        $parts = explode(',', $fwd);
-        $ip = trim($parts[0]);
-        if ($ip !== '') return $ip;
+    if ($fwd !== '') {
+        $parts = array_reverse(explode(',', $fwd));
+        foreach ($parts as $p) {
+            $ip = trim($p);
+            if ($ip !== '' && filter_var($ip, FILTER_VALIDATE_IP)) return $ip;
+        }
     }
     return $_SERVER['REMOTE_ADDR'] ?? 'desconocida';
 }
