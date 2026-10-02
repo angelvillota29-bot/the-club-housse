@@ -212,6 +212,9 @@ $order = [
     'canal' => $canal,
     'metodoPago' => $metodoPago,
     'accountEmail' => $accountEmail,
+    // El pedido solo cuenta como venta en el Historial/Analíticas del Receptor
+    // de Pedidos cuando el cajero confirma el pago (api/confirm-payment.php).
+    'pagoConfirmado' => false,
 ];
 $data['ordersData'][] = $order;
 // Registro PERMANENTE: a diferencia de ordersData (la cola de cocina, que se
