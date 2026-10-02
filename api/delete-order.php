@@ -38,6 +38,16 @@ $antes = count($ordersData);
 $ordersData = array_values(array_filter($ordersData, fn($o) => ($o['id'] ?? null) != $id));
 $data['ordersData'] = $ordersData;
 
+// "Despachar" solo quita el ticket de la cola de cocina; el pedido sigue en
+// el historial permanente. Se deja la hora del despacho en ese registro.
+if (isset($data['historialPedidos']) && is_array($data['historialPedidos']) && count($ordersData) !== $antes) {
+    $ahora = (int) round(microtime(true) * 1000);
+    foreach ($data['historialPedidos'] as &$h) {
+        if (($h['id'] ?? null) == $id) $h['despachadoAt'] = $ahora;
+    }
+    unset($h);
+}
+
 if (count($ordersData) === $antes) {
     http_response_code(404);
     echo json_encode(['success' => false, 'error' => 'Pedido no encontrado']);

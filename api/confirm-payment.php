@@ -34,6 +34,9 @@ if ($id === null) {
     exit;
 }
 
+// Quién confirmó (correo del usuario del Receptor), para tener rastro de
+// auditoría -- se usará cuando todo esto se conecte con la facturación DIAN.
+$confirmadoPor = substr(trim((string) ($input['confirmadoPor'] ?? '')), 0, 120);
 $ahora = (int) round(microtime(true) * 1000);
 $encontrado = false;
 // El mismo pedido vive en la cola de cocina (ordersData, si todavía no se
@@ -44,6 +47,7 @@ foreach (['ordersData', 'historialPedidos'] as $lista) {
         if (($o['id'] ?? null) == $id) {
             $o['pagoConfirmado'] = true;
             $o['pagoConfirmadoAt'] = $ahora;
+            $o['pagoConfirmadoPor'] = $confirmadoPor;
             $encontrado = true;
         }
     }
