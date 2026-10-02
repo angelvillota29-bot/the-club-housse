@@ -1,5 +1,6 @@
 <?php
 header('Content-Type: application/json');
+require_once __DIR__ . '/_data.php';
 $headers = getallheaders();
 $authHeader = $headers['Authorization'] ?? '';
 $apiKey = str_replace('Bearer ', '', $authHeader);
@@ -31,19 +32,23 @@ if ($scheduleId === null || $newStock === null) {
     exit;
 }
 
-$found = false;
-foreach ($data['schedule'] as &$s) {
-    if ($s['id'] == $scheduleId) {
-        $s['stock'] = (int)$newStock;
-        $found = true;
-        break;
+$res = dataMutar(function (&$data) use ($scheduleId, $newStock) {
+    if (!isset($data['schedule']) || !is_array($data['schedule'])) return ['err' => 'no_encontrado'];
+    foreach ($data['schedule'] as &$s) {
+        if ($s['id'] == $scheduleId) {
+            $s['stock'] = (int)$newStock;
+            return true;
+        }
     }
-}
-if ($found) {
-    file_put_contents($file, json_encode($data));
-    echo json_encode(['success' => true]);
-} else {
+    unset($s);
+    return ['err' => 'no_encontrado'];
+});
+if (!$res['ok']) {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'error' => 'No se pudo guardar']);
+} elseif (is_array($res['res'])) {
     http_response_code(404);
     echo json_encode(['success' => false, 'error' => 'Horario no encontrado']);
+} else {
+    echo json_encode(['success' => true]);
 }
-?>

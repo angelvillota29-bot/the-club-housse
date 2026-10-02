@@ -25,8 +25,7 @@ if ($usuario === '' || $clave === '') {
     exit;
 }
 
-$file = dirname(__DIR__) . '/data/data.json';
-$data = file_exists($file) ? (json_decode(file_get_contents($file), true) ?: []) : [];
+$data = dataLeer() ?: [];
 $meseroAuth = $data['meseroAuth'] ?? null;
 
 if (!$meseroAuth || empty($meseroAuth['usuario']) || empty($meseroAuth['passwordHash'])) {
@@ -48,5 +47,5 @@ if (!$usuarioOk || !$claveOk) {
 // El campo "email" de la sesión guarda el nombre de usuario del mesero, no un
 // correo real -- issueSession()/readSession() no le dan ningún tratamiento
 // especial, es solo el identificador que se muestra en la barra de arriba.
-issueSession($usuario, 'mesero');
+issueSession($usuario, 'mesero', ['mv' => meseroVersion($meseroAuth)]);
 echo json_encode(['success' => true, 'email' => $usuario, 'role' => 'mesero']);

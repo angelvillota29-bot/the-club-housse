@@ -4,6 +4,7 @@
 // Authorization: Bearer <API Key> que coincida con la API Key configurada
 // (variable de entorno N8N_API_KEY, o data.n8nConfig.apiKey como respaldo).
 header('Content-Type: application/json');
+require_once __DIR__ . '/_data.php';
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 date_default_timezone_set('America/Bogota');
 
@@ -74,7 +75,13 @@ $schedule = $menuMode === 'unico' ? ($data['singleMenuSchedule'] ?? []) : ($data
 if (reiniciarStockDiario($schedule, $hoyFecha)) {
     if ($menuMode === 'unico') $data['singleMenuSchedule'] = $schedule;
     else $data['schedule'] = $schedule;
-    @file_put_contents($file, json_encode($data));
+    // Con candado y sobre los datos más recientes, para no pisar un pedido
+    // que entró justo ahora.
+    dataMutar(function (&$d) use ($menuMode, $hoyFecha) {
+        $k = $menuMode === 'unico' ? 'singleMenuSchedule' : 'schedule';
+        if (!isset($d[$k]) || !is_array($d[$k])) return false;
+        return reiniciarStockDiario($d[$k], $hoyFecha) ? true : false;
+    });
 }
 
 // ── Resolver ?day= ("today" = el día de hoy según el reloj del servidor, o

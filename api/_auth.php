@@ -8,6 +8,8 @@
 // 'superadmin' (SUPREME_ADMIN_EMAIL). El campo 'email' de la sesión de un
 // mesero en realidad guarda su nombre de usuario, no un correo real.
 
+require_once __DIR__ . '/_data.php';
+
 const SESSION_COOKIE = 'housse_session';
 const SESSION_TTL = 60 * 60 * 24 * 30; // 30 días
 const SUPREME_ADMIN_EMAIL = 'angelvillota4@gmail.com';
@@ -27,8 +29,8 @@ function sessionSecret() {
     return $secret;
 }
 
-function issueSession($email, $role) {
-    $payload = json_encode(['email' => $email, 'role' => $role, 'exp' => time() + SESSION_TTL]);
+function issueSession($email, $role, array $extra = []) {
+    $payload = json_encode(['email' => $email, 'role' => $role, 'exp' => time() + SESSION_TTL] + $extra);
     $b64 = rtrim(strtr(base64_encode($payload), '+/', '-_'), '=');
     $sig = hash_hmac('sha256', $b64, sessionSecret());
     $token = $b64 . '.' . $sig;
@@ -52,7 +54,59 @@ function readSession() {
     if (!hash_equals(hash_hmac('sha256', $b64, sessionSecret()), $sig)) return null;
     $payload = json_decode(base64_decode(strtr($b64, '-_', '+/')), true);
     if (!$payload || ($payload['exp'] ?? 0) < time()) return null;
-    return $payload;
+    return sesionVigente($payload);
+}
+
+// Huella de las credenciales de mesero: si el superadmin cambia usuario o
+// clave, las cookies de mesero emitidas antes dejan de servir.
+function meseroVersion($meseroAuth) {
+    return substr(hash('sha256', ($meseroAuth['usuario'] ?? '') . '|' . ($meseroAuth['passwordHash'] ?? '')), 0, 16);
+}
+
+// La cookie firmada solo prueba QUIÉN es la persona; el rol se vuelve a
+// calcular en cada petición contra los datos actuales. Así, si se quita a un
+// administrador o se cambia la clave de mesero, el acceso se corta de
+// inmediato y no 30 días después cuando caduque la cookie.
+function sesionVigente(array $p) {
+    $data = dataLeer();
+    $data = is_array($data) ? $data : [];
+    if (($p['role'] ?? '') === 'mesero') {
+        $auth = $data['meseroAuth'] ?? null;
+        if (!is_array($auth) || empty($auth['usuario']) || empty($auth['passwordHash'])) return null;
+        if (!hash_equals(meseroVersion($auth), (string) ($p['mv'] ?? ''))) return null;
+        return $p;
+    }
+    $users = $data['usersData'] ?? [];
+    $p['role'] = resolveRole((string) ($p['email'] ?? ''), is_array($users) ? $users : []);
+    return $p;
+}
+
+// Para endpoints que cambian datos con la cookie de sesión: solo POST, y solo
+// si la petición viene de nuestra propia página. Sin esto, una página ajena
+// podía hacer que el navegador de un administrador llamara al endpoint (CSRF).
+function requirePostSameOrigin($exigirJson = true) {
+    $fallo = function ($code, $msg) {
+        http_response_code($code);
+        echo json_encode(['success' => false, 'error' => $msg]);
+        exit;
+    };
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+        header('Allow: POST');
+        $fallo(405, 'Método no permitido');
+    }
+    $sfs = $_SERVER['HTTP_SEC_FETCH_SITE'] ?? '';
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    if ($sfs !== '') {
+        if ($sfs !== 'same-origin' && $sfs !== 'none') $fallo(403, 'Petición de origen no permitido');
+    } elseif ($origin !== '') {
+        $hostOrigen = strtolower((string) parse_url($origin, PHP_URL_HOST));
+        $hostSitio = strtolower(explode(':', $_SERVER['HTTP_HOST'] ?? '')[0]);
+        if ($hostOrigen === '' || $hostOrigen !== $hostSitio) $fallo(403, 'Petición de origen no permitido');
+    } elseif ($exigirJson && stripos($_SERVER['CONTENT_TYPE'] ?? '', 'application/json') === false) {
+        // Sin cabeceras de origen (navegadores muy viejos u otros clientes):
+        // exigir JSON obliga a un "preflight" que un sitio ajeno no pasa.
+        $fallo(403, 'Petición no permitida');
+    }
 }
 
 function requireRole($minRole) {

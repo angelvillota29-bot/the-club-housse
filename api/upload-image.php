@@ -1,6 +1,7 @@
 <?php
 header('Content-Type: application/json');
 require_once __DIR__ . '/_auth.php';
+requirePostSameOrigin(false);
 requireRole('admin');
 
 // Carpeta donde se guardarán las imágenes

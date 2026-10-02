@@ -5,6 +5,7 @@
 // (password_hash) y nunca se guarde ni se vuelva a mandar en texto plano.
 header('Content-Type: application/json');
 require_once __DIR__ . '/_auth.php';
+requirePostSameOrigin();
 requireRole('superadmin');
 
 $input = json_decode(file_get_contents('php://input'), true) ?: [];
@@ -21,19 +22,13 @@ if (strlen($clave) < 6) {
     exit;
 }
 
-$dataDir = dirname(__DIR__) . '/data';
-$file = $dataDir . '/data.json';
-$data = file_exists($file) ? (json_decode(file_get_contents($file), true) ?: []) : [];
-if (!is_array($data)) $data = [];
+$hash = password_hash($clave, PASSWORD_DEFAULT);
+$res = dataMutar(function (&$data) use ($usuario, $hash) {
+    $data['meseroAuth'] = ['usuario' => $usuario, 'passwordHash' => $hash];
+    return true;
+});
 
-$data['meseroAuth'] = (object) [
-    'usuario' => $usuario,
-    'passwordHash' => password_hash($clave, PASSWORD_DEFAULT),
-];
-
-if (!is_dir($dataDir)) @mkdir($dataDir, 0775, true);
-
-if (file_put_contents($file, json_encode($data)) === false) {
+if (!$res['ok']) {
     http_response_code(500);
     echo json_encode(['success' => false, 'error' => 'No se pudo guardar']);
     exit;

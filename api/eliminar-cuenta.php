@@ -8,6 +8,8 @@
 // ya en camino.
 header('Content-Type: application/json');
 require_once __DIR__ . '/_auth.php';
+// Acción destructiva: solo POST desde nuestra propia página (anti-CSRF).
+requirePostSameOrigin(false);
 
 $session = readSession();
 if (!$session) {
@@ -15,33 +17,32 @@ if (!$session) {
     echo json_encode(['success' => false, 'error' => 'Inicia sesión para eliminar tu cuenta']);
     exit;
 }
-$email = $session['email'];
+$email = strtolower($session['email']);
 
-$file = dirname(__DIR__) . '/data/data.json';
-$data = file_exists($file) ? (json_decode(file_get_contents($file), true) ?: []) : [];
-
-$anonimizados = 0;
-if (isset($data['historialPedidos']) && is_array($data['historialPedidos'])) {
-    foreach ($data['historialPedidos'] as &$p) {
-        if (strtolower($p['accountEmail'] ?? '') === $email) {
-            $p['accountEmail'] = null;
-            $p['cliente'] = ['nombre' => 'Cuenta eliminada', 'direccion' => '', 'telefono' => '', 'nota' => ''];
-            $anonimizados++;
+$res = dataMutar(function (&$data) use ($email) {
+    $anonimizados = 0;
+    if (isset($data['historialPedidos']) && is_array($data['historialPedidos'])) {
+        foreach ($data['historialPedidos'] as &$p) {
+            if (strtolower($p['accountEmail'] ?? '') === $email) {
+                $p['accountEmail'] = null;
+                $p['cliente'] = ['nombre' => 'Cuenta eliminada', 'direccion' => '', 'telefono' => '', 'nota' => ''];
+                $anonimizados++;
+            }
         }
+        unset($p);
     }
-    unset($p);
-}
+    // Si esta cuenta también era administrador simple, se le quita el acceso.
+    if (isset($data['usersData']) && is_array($data['usersData'])) {
+        $data['usersData'] = array_values(array_filter($data['usersData'], fn($u) => strtolower($u['email'] ?? '') !== $email));
+    }
+    return $anonimizados;
+});
 
-// Si esta cuenta también era administrador simple, se le quita el acceso.
-if (isset($data['usersData']) && is_array($data['usersData'])) {
-    $data['usersData'] = array_values(array_filter($data['usersData'], fn($u) => strtolower($u['email'] ?? '') !== $email));
-}
-
-if (file_put_contents($file, json_encode($data)) === false) {
+if (!$res['ok']) {
     http_response_code(500);
     echo json_encode(['success' => false, 'error' => 'No se pudo procesar la solicitud, intenta de nuevo']);
     exit;
 }
 
 clearSession();
-echo json_encode(['success' => true, 'pedidosAnonimizados' => $anonimizados]);
+echo json_encode(['success' => true, 'pedidosAnonimizados' => $res['res']]);

@@ -25,9 +25,12 @@ if (!file_exists($file)) {
     exit;
 }
 
-$data = json_decode(file_get_contents($file), true);
+$data = dataLeer();
 if (!is_array($data)) {
-    echo file_get_contents($file);
+    // Antes aquí se imprimía el archivo crudo (saltándose el filtrado de
+    // datos privados); ahora se responde un error y no se filtra nada.
+    http_response_code(503);
+    echo json_encode(['success' => false, 'error' => 'Los datos no están disponibles en este momento, intenta de nuevo']);
     exit;
 }
 
@@ -63,13 +66,22 @@ if (isset($data['schedule']) && is_array($data['schedule'])) $cambio = reiniciar
 if (isset($data['singleMenuSchedule']) && is_array($data['singleMenuSchedule'])) $cambio = reiniciarStockDiarioLD($data['singleMenuSchedule'], $hoyFecha) || $cambio;
 
 if ($cambio) {
-    @file_put_contents($file, json_encode($data));
+    // Se aplica el reinicio sobre los datos más recientes y con candado, para
+    // no pisar un pedido que entró justo en este instante.
+    dataMutar(function (&$d) use ($hoyFecha) {
+        $c = false;
+        if (isset($d['schedule']) && is_array($d['schedule'])) $c = reiniciarStockDiarioLD($d['schedule'], $hoyFecha) || $c;
+        if (isset($d['singleMenuSchedule']) && is_array($d['singleMenuSchedule'])) $c = reiniciarStockDiarioLD($d['singleMenuSchedule'], $hoyFecha) || $c;
+        return $c;
+    });
 }
 
 if (!$isAdmin) {
     unset($data['usersData'], $data['n8nConfig'], $data['ordersData'], $data['notifyConfig'], $data['historialPedidos'], $data['meseroAuth']);
 } elseif (!$isSuperAdmin) {
-    unset($data['n8nConfig'], $data['notifyConfig'], $data['meseroAuth']);
+    // Un admin normal tampoco necesita la lista de administradores, la cola de
+    // pedidos ni el historial (con nombres, direcciones y teléfonos de clientes).
+    unset($data['n8nConfig'], $data['notifyConfig'], $data['meseroAuth'], $data['usersData'], $data['ordersData'], $data['historialPedidos']);
 }
 
 echo json_encode($data);

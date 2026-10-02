@@ -4,6 +4,7 @@
 // como venta en el Historial y las Analíticas. Mismo patrón y misma API Key
 // que delete-order.php/get-historial.php.
 header('Content-Type: application/json');
+require_once __DIR__ . '/_data.php';
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 $file = dirname(__DIR__) . '/data/data.json';
@@ -38,31 +39,34 @@ if ($id === null) {
 // auditoría -- se usará cuando todo esto se conecte con la facturación DIAN.
 $confirmadoPor = substr(trim((string) ($input['confirmadoPor'] ?? '')), 0, 120);
 $ahora = (int) round(microtime(true) * 1000);
-$encontrado = false;
-// El mismo pedido vive en la cola de cocina (ordersData, si todavía no se
-// despacha) y en el historial permanente: se marca en ambos.
-foreach (['ordersData', 'historialPedidos'] as $lista) {
-    if (!isset($data[$lista]) || !is_array($data[$lista])) continue;
-    foreach ($data[$lista] as &$o) {
-        if (($o['id'] ?? null) == $id) {
-            $o['pagoConfirmado'] = true;
-            $o['pagoConfirmadoAt'] = $ahora;
-            $o['pagoConfirmadoPor'] = $confirmadoPor;
-            $encontrado = true;
+
+$res = dataMutar(function (&$data) use ($id, $confirmadoPor, $ahora) {
+    $encontrado = false;
+    // El mismo pedido vive en la cola de cocina (ordersData, si todavía no se
+    // despacha) y en el historial permanente: se marca en ambos.
+    foreach (['ordersData', 'historialPedidos'] as $lista) {
+        if (!isset($data[$lista]) || !is_array($data[$lista])) continue;
+        foreach ($data[$lista] as &$o) {
+            if (($o['id'] ?? null) == $id) {
+                $o['pagoConfirmado'] = true;
+                $o['pagoConfirmadoAt'] = $ahora;
+                $o['pagoConfirmadoPor'] = $confirmadoPor;
+                $encontrado = true;
+            }
         }
+        unset($o);
     }
-    unset($o);
-}
+    return $encontrado ? true : ['err' => 'no_encontrado'];
+});
 
-if (!$encontrado) {
-    http_response_code(404);
-    echo json_encode(['success' => false, 'error' => 'Pedido no encontrado']);
-    exit;
-}
-
-if (file_put_contents($file, json_encode($data)) === false) {
+if (!$res['ok']) {
     http_response_code(500);
     echo json_encode(['success' => false, 'error' => 'No se pudo guardar']);
+    exit;
+}
+if (is_array($res['res'])) {
+    http_response_code(404);
+    echo json_encode(['success' => false, 'error' => 'Pedido no encontrado']);
     exit;
 }
 
