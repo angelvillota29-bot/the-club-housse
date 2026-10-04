@@ -1,10 +1,7 @@
 import { useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import NavBar from './components/NavBar';
-import SocialFloat from './components/SocialFloat';
 import LoginModal from './components/LoginModal';
-import PrivacyButton from './components/PrivacyButton';
-import TermsButton from './components/TermsButton';
 import { useData } from './context/DataContext';
 import { useAuth } from './context/AuthContext';
 import Menu from './pages/Menu';
@@ -45,13 +42,6 @@ export default function App() {
           <Route path="*" element={<Navigate to="/menu" replace />} />
         </Routes>
       </main>
-      <SocialFloat />
-      {!isAdmin && (
-        <>
-          <PrivacyButton />
-          <TermsButton />
-        </>
-      )}
       {showLogin && <LoginModal onClose={() => setShowLogin(false)} />}
     </div>
   );

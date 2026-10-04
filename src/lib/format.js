@@ -23,6 +23,11 @@ export function timeToMinutes(t) {
   return (h || 0) * 60 + (m || 0);
 }
 
+// Solo se aceptan enlaces http(s) como href (rechaza javascript:, data:, etc.).
+export function isSafeHttpUrl(value) {
+  return typeof value === 'string' && /^https?:\/\//i.test(value.trim());
+}
+
 export function newCartKey() {
   return 'c' + Date.now() + Math.random().toString(36).slice(2, 7);
 }

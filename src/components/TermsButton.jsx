@@ -48,7 +48,7 @@ export default function TermsButton({ inline, onClose: onCloseProp }) {
                 reparto o entre en preparación.
               </p>
               <p>
-                <strong>6. Datos personales.</strong> Se rige por nuestro aviso de privacidad — botón "Tus datos".
+                <strong>6. Datos personales.</strong> Se rige por nuestro aviso de privacidad ("Tus datos", en la página Acerca de).
               </p>
               <p>
                 <strong>7. Chat y bots.</strong> Si pides a través de nuestro chatbot, este es el mismo documento que el bot te
@@ -57,7 +57,7 @@ export default function TermsButton({ inline, onClose: onCloseProp }) {
               </p>
               <p>
                 <strong>8. Tu cuenta.</strong> Iniciar sesión con Google es opcional. Si lo haces, puedes eliminar tu cuenta
-                cuando quieras desde "Mi cuenta" — ver el botón "Tus datos" para el detalle de qué se guarda y con quién se
+                cuando quieras desde "Mi cuenta" — ver "Tus datos" en la página Acerca de para el detalle de qué se guarda y con quién se
                 comparte.
               </p>
             </div>

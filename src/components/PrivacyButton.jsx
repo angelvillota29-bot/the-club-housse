@@ -1,18 +1,25 @@
 import { useState } from 'react';
 
-export default function PrivacyButton() {
-  const [open, setOpen] = useState(false);
+export default function PrivacyButton({ inline, onClose: onCloseProp }) {
+  const [open, setOpen] = useState(!!inline);
+
+  const close = () => {
+    setOpen(false);
+    onCloseProp?.();
+  };
 
   return (
     <>
-      <button onClick={() => setOpen(true)} style={btnStyle}>
-        🔒 Tus datos
-      </button>
+      {!inline && (
+        <button onClick={() => setOpen(true)} style={btnStyle}>
+          🔒 Tus datos
+        </button>
+      )}
 
       {open && (
         <div style={overlayStyle}>
           <div style={cardStyle}>
-            <button onClick={() => setOpen(false)} style={closeBtnStyle} aria-label="Cerrar">
+            <button onClick={close} style={closeBtnStyle} aria-label="Cerrar">
               ×
             </button>
             <h2 style={titleStyle}>Cómo usamos tus datos</h2>
@@ -20,13 +27,12 @@ export default function PrivacyButton() {
               <p>
                 <strong>Responsable del tratamiento:</strong> The Club Housse (Cra 26p10 93-60, Marroquín 1 - Comuna 14) es el
                 único responsable del tratamiento de tus datos personales recogidos en esta página y en sus canales de
-                atención (WhatsApp, chat web).
+                atención (WhatsApp, Telegram).
               </p>
               <p>
                 <strong>¿Qué datos pedimos?</strong> Al hacer un pedido: tu nombre, dirección (si es a domicilio), teléfono y,
                 si la dejas, una nota. Si inicias sesión con Google, guardamos tu correo para tu cuenta, y tu historial de
-                pedidos queda asociado a ella (para mostrarte "Mis pedidos" y "Tus favoritos"). Si nos escribes por WhatsApp o
-                el chat del sitio, guardamos esa conversación para atenderte.
+                pedidos queda asociado a ella (para mostrarte "Mis pedidos" y "Tus favoritos"). Si nos escribes por WhatsApp o Telegram, guardamos esa conversación para atenderte.
               </p>
               <p>
                 <strong>¿Para qué los usamos?</strong> Solo para preparar y entregar tu pedido, contactarte si hay algún
@@ -34,7 +40,7 @@ export default function PrivacyButton() {
                 tus datos.
               </p>
               <p>
-                <strong>Uso de inteligencia artificial.</strong> El chat de este sitio y de WhatsApp está atendido por un
+                <strong>Uso de inteligencia artificial.</strong> El chat de WhatsApp y Telegram está atendido por un
                 asistente de IA (no una persona) que lee tu mensaje para ayudarte a ver el menú y armar tu pedido. Si prefieres
                 hablar con una persona, puedes pedirlo en cualquier momento.
               </p>
