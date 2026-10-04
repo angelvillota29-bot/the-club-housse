@@ -38,6 +38,17 @@ export default function Menu() {
   const bebidas = useMemo(() => groups.filter((g) => g.kind.esBebida).flatMap((g) => g.dishes.filter((d) => !d.isSoldOut).map(aOpcion)), [groups]);
   const puedePedir = esHoy && open;
 
+  // Orden en pantalla: primero la comida; al final del todo las bebidas y
+  // gaseosas, y de último los adicionales, para que no estorben al elegir.
+  const gruposOrdenados = useMemo(
+    () => [
+      ...groups.filter((g) => !g.kind.esBebida && !g.kind.esAdicion),
+      ...groups.filter((g) => g.kind.esBebida && !g.kind.esAdicion),
+      ...groups.filter((g) => g.kind.esAdicion),
+    ],
+    [groups],
+  );
+
   const submitOrder = async ({ nombre, direccion, telefono, nota, tipoEntrega, metodoPago }) => {
     const payload = {
       day: esUnico ? undefined : day,
@@ -90,7 +101,7 @@ export default function Menu() {
 
       <div style={{ marginTop: 24 }}>
         {groups.length === 0 && <p style={{ color: '#a68f78', fontSize: 14 }}>No hay platillos para este día.</p>}
-        {groups.map(({ category, dishes, kind }) => {
+        {gruposOrdenados.map(({ category, dishes, kind }) => {
           if (kind.esAdicion) return <AdicionesInfo key={category.id} category={category} dishes={dishes} />;
           if (kind.agrupada) return <FamilyCard key={category.id} category={category} dishes={dishes} puedePedir={puedePedir} onAdd={handleAdd} />;
           return (
