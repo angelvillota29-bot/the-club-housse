@@ -75,7 +75,7 @@ export default function MiCuenta() {
               <div style={{ fontSize: 12, color: '#8a7a6a', marginTop: 2 }}>
                 {p.items?.map((it, i) => (
                   <span key={i}>
-                    {it.cantidad} x {it.name}
+                    {it.cantidad} x {it.name}{it.adiciones?.length ? ` (${it.adiciones.map((a) => `+ ${a.name}`).join(' ')})` : ''}
                     {i < p.items.length - 1 ? ', ' : ''}
                   </span>
                 ))}

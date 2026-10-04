@@ -79,7 +79,7 @@ export default function Orders() {
           </div>
           <div style={{ fontSize: 12, color: '#8a7a6a', marginTop: 4 }}>
             {o.items?.map((it, i) => (
-              <span key={i}>{it.cantidad} x {it.name}{i < o.items.length - 1 ? ', ' : ''}</span>
+              <span key={i}>{it.cantidad} x {it.name}{it.adiciones?.length ? ` (${it.adiciones.map((a) => `+ ${a.name}`).join(' ')})` : ''}{i < o.items.length - 1 ? ', ' : ''}</span>
             ))}
           </div>
           <div style={{ marginTop: 6 }}>

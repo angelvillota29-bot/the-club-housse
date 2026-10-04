@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useData } from '../../../context/DataContext';
 import { card, input, label, listItem, smallBtn, heading } from '../adminStyles';
+import { categoryKind } from '../../../lib/menu';
 
-const EMPTY = { name: '', deliveryEnabled: true, exentoEmpaque: false };
+const EMPTY = { name: '', deliveryEnabled: true, exentoEmpaque: false, agrupada: false, personalizable: false, esAdicion: false, esBebida: false };
 
 export default function Categories() {
   const { state, save } = useData();
@@ -26,7 +27,7 @@ export default function Categories() {
   };
 
   const edit = (cat) => {
-    setForm({ name: cat.name, deliveryEnabled: cat.deliveryEnabled !== false, exentoEmpaque: !!cat.exentoEmpaque });
+    setForm({ name: cat.name, deliveryEnabled: cat.deliveryEnabled !== false, exentoEmpaque: !!cat.exentoEmpaque, ...categoryKind(cat) });
     setEditId(cat.id);
   };
 
@@ -49,6 +50,18 @@ export default function Categories() {
           </label>
           <label style={{ ...label, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <input type="checkbox" checked={form.exentoEmpaque} onChange={set('exentoEmpaque')} /> Exenta de cargo de empaque
+          </label>
+          <label style={{ ...label, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <input type="checkbox" checked={form.agrupada} onChange={set('agrupada')} /> Mostrar sus productos en una sola tarjeta con una sola foto (variantes)
+          </label>
+          <label style={{ ...label, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <input type="checkbox" checked={form.personalizable} onChange={set('personalizable')} /> Sus productos se pueden pedir con adicionales
+          </label>
+          <label style={{ ...label, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <input type="checkbox" checked={form.esAdicion} onChange={set('esAdicion')} /> Esta categoría es la lista de adicionales
+          </label>
+          <label style={{ ...label, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <input type="checkbox" checked={form.esBebida} onChange={set('esBebida')} /> Son bebidas (se ofrecen al confirmar el pedido)
           </label>
           <div style={{ display: 'flex', gap: 10 }}>
             <button type="submit" className="btn-pill btn-orange">

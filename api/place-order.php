@@ -69,15 +69,46 @@ if ($nombre === '' || ($tipoEntrega !== 'comer_aqui' && $telefono === '') || emp
 }
 if (count($items) > 40) respuestaError(400, 'El pedido tiene demasiados platillos distintos');
 
-// Un mismo platillo repetido en varias líneas se suma ANTES de validar el
-// stock; si no, cada línea pasaba por separado y se podía pedir más de lo que
-// había disponible.
-$pedidoPorPlato = [];
+// Cada línea es un producto con SUS propios adicionales (ej. una colita con
+// queso y nuggets). Los adicionales llegan solo como ids: el nombre y el precio
+// se toman SIEMPRE del menú guardado en el servidor, nunca de lo que mande el
+// navegador. Más abajo se suma la demanda de cada platillo (producto +
+// adicionales) ANTES de validar el stock, para que repetir un platillo en
+// varias líneas no permita pedir más de lo que hay.
+function idMenu($v) {
+    if (is_string($v) && ctype_digit($v)) return (int) $v;
+    return (is_int($v) || is_string($v)) ? $v : null;
+}
+$lineas = [];
 foreach ($items as $item) {
-    $dishId = is_array($item) ? ($item['dishId'] ?? null) : null;
-    if (!is_int($dishId) && !is_string($dishId)) respuestaError(400, 'Uno de los platillos de tu pedido no es válido');
+    $dishId = is_array($item) ? idMenu($item['dishId'] ?? null) : null;
+    if ($dishId === null) respuestaError(400, 'Uno de los platillos de tu pedido no es válido');
     $cantidad = min(50, max(1, (int) ($item['cantidad'] ?? 1)));
-    $pedidoPorPlato[$dishId] = min(100, ($pedidoPorPlato[$dishId] ?? 0) + $cantidad);
+    $adiciones = [];
+    if (isset($item['adiciones'])) {
+        if (!is_array($item['adiciones']) || count($item['adiciones']) > 15) respuestaError(400, 'Los adicionales del pedido no son válidos');
+        foreach ($item['adiciones'] as $a) {
+            $aId = idMenu($a);
+            if ($aId === null) respuestaError(400, 'Uno de los adicionales de tu pedido no es válido');
+            if (!in_array($aId, $adiciones, true)) $adiciones[] = $aId;
+        }
+    }
+    $lineas[] = ['dishId' => $dishId, 'cantidad' => $cantidad, 'adiciones' => $adiciones];
+}
+
+// Tipo de categoría (mismas reglas que el menú de la página): si la categoría
+// trae la marca explícita manda esa; si no, se deduce del nombre.
+function normalizarNombre($s) {
+    $s = function_exists('mb_strtolower') ? mb_strtolower((string) $s, 'UTF-8') : strtolower((string) $s);
+    return trim(strtr($s, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n']));
+}
+function tipoCategoria($cat) {
+    $n = normalizarNombre($cat['name'] ?? '');
+    $familias = ['salchipapas', 'burguer', 'burger', 'hamburguesas', 'perros', 'colitas'];
+    return [
+        'esAdicion' => (is_array($cat) && array_key_exists('esAdicion', $cat) && $cat['esAdicion'] !== null) ? !empty($cat['esAdicion']) : $n === 'adiciones',
+        'personalizable' => (is_array($cat) && array_key_exists('personalizable', $cat) && $cat['personalizable'] !== null) ? !empty($cat['personalizable']) : in_array($n, $familias, true),
+    ];
 }
 
 // ── Reinicio diario de stock (igual que en el navegador): cada fila con un
@@ -124,7 +155,7 @@ $orderId = (int) round(microtime(true) * 1000);
 
 // Todo lo que lee y cambia el almacén de datos ocurre con el candado tomado:
 // dos pedidos simultáneos ya no se pisan ni descuentan el mismo stock dos veces.
-$res = dataMutar(function (&$data) use ($pedidoPorPlato, $day, $nombre, $direccion, $telefono, $nota, $tipoEntrega, $canal, $metodoPago, $accountEmail, $hoy, $hoyFecha, $orderId) {
+$res = dataMutar(function (&$data) use ($lineas, $day, $nombre, $direccion, $telefono, $nota, $tipoEntrega, $canal, $metodoPago, $accountEmail, $hoy, $hoyFecha, $orderId) {
     // El modo de menú sale de lo guardado en el servidor, no de lo que diga el
     // navegador (antes se podía pedir "modo único" para saltarse el día).
     $menuMode = ($data['menuMode'] ?? 'semanal') === 'unico' ? 'unico' : 'semanal';
@@ -159,9 +190,13 @@ $res = dataMutar(function (&$data) use ($pedidoPorPlato, $day, $nombre, $direcci
         if ($menuMode === 'unico' || $s['day'] === $day) $scheduleIdxByDishId[$s['dishId']] = $i;
     }
 
-    $resueltos = [];
-    $total = 0;
-    foreach ($pedidoPorPlato as $dishId => $cantidad) {
+    // Demanda total de cada platillo (el producto y sus adicionales cuentan).
+    $demanda = [];
+    foreach ($lineas as $l) {
+        $demanda[$l['dishId']] = ($demanda[$l['dishId']] ?? 0) + $l['cantidad'];
+        foreach ($l['adiciones'] as $aId) $demanda[$aId] = ($demanda[$aId] ?? 0) + $l['cantidad'];
+    }
+    foreach ($demanda as $dishId => $cantidad) {
         if (!isset($dishesById[$dishId])) {
             return ['err' => [400, 'Uno de los platillos de tu pedido ya no existe']];
         }
@@ -169,22 +204,43 @@ $res = dataMutar(function (&$data) use ($pedidoPorPlato, $day, $nombre, $direcci
         if (!isset($scheduleIdxByDishId[$dishId])) {
             return ['err' => [409, '"' . $dish['name'] . '" ya no está disponible']];
         }
-        $schedIdx = $scheduleIdxByDishId[$dishId];
-        $schedRow = $schedule[$schedIdx];
+        $schedRow = $schedule[$scheduleIdxByDishId[$dishId]];
         if (($schedRow['available'] ?? true) === false) {
             return ['err' => [409, '"' . $dish['name'] . '" ya no está disponible']];
         }
         if ($schedRow['stock'] !== null && $schedRow['stock'] < $cantidad) {
             return ['err' => [409, 'Ya no queda suficiente "' . $dish['name'] . '" (quedan ' . $schedRow['stock'] . ')']];
         }
-        $precioUnitario = (int) preg_replace('/\D/', '', (string) $dish['price']) + cargoEmpaque($dish, $categoriesById, $takeoutConfig, $tipoEntrega);
-        $total += $precioUnitario * $cantidad;
+    }
+
+    $resueltos = [];
+    $total = 0;
+    foreach ($lineas as $l) {
+        $dish = $dishesById[$l['dishId']];
+        $adic = [];
+        if ($l['adiciones']) {
+            if (!tipoCategoria($categoriesById[$dish['categoryId']] ?? null)['personalizable']) {
+                return ['err' => [400, '"' . $dish['name'] . '" no admite adicionales']];
+            }
+            foreach ($l['adiciones'] as $aId) {
+                $ad = $dishesById[$aId];
+                if (!tipoCategoria($categoriesById[$ad['categoryId']] ?? null)['esAdicion']) {
+                    return ['err' => [400, '"' . $ad['name'] . '" no es un adicional']];
+                }
+                $adic[] = ['dishId' => $ad['id'], 'name' => $ad['name'], 'precio' => (int) preg_replace('/\D/', '', (string) $ad['price'])];
+            }
+        }
+        // El precio por unidad incluye los adicionales de esa línea.
+        $precioUnitario = (int) preg_replace('/\D/', '', (string) $dish['price'])
+            + cargoEmpaque($dish, $categoriesById, $takeoutConfig, $tipoEntrega)
+            + array_sum(array_column($adic, 'precio'));
+        $total += $precioUnitario * $l['cantidad'];
         $resueltos[] = [
             'dishId' => $dish['id'],
-            'scheduleIdx' => $schedIdx,
             'name' => $dish['name'],
-            'cantidad' => $cantidad,
+            'cantidad' => $l['cantidad'],
             'precioUnitario' => $precioUnitario,
+            'adiciones' => $adic,
         ];
     }
 
@@ -195,9 +251,10 @@ $res = dataMutar(function (&$data) use ($pedidoPorPlato, $day, $nombre, $direcci
 
     // Todo válido -- descuenta stock (solo donde el stock se controla; null =
     // ilimitado). Nunca queda en negativo.
-    foreach ($resueltos as $r) {
-        if ($schedule[$r['scheduleIdx']]['stock'] !== null) {
-            $schedule[$r['scheduleIdx']]['stock'] = max(0, $schedule[$r['scheduleIdx']]['stock'] - $r['cantidad']);
+    foreach ($demanda as $dishId => $cantidad) {
+        $idx = $scheduleIdxByDishId[$dishId];
+        if ($schedule[$idx]['stock'] !== null) {
+            $schedule[$idx]['stock'] = max(0, $schedule[$idx]['stock'] - $cantidad);
         }
     }
     if ($menuMode === 'unico') $data['singleMenuSchedule'] = $schedule;
@@ -212,7 +269,9 @@ $res = dataMutar(function (&$data) use ($pedidoPorPlato, $day, $nombre, $direcci
         'tipoEntrega' => $tipoEntrega,
         'cliente' => ['nombre' => $nombre, 'direccion' => $direccion, 'telefono' => $telefono, 'nota' => $nota],
         'items' => array_map(function ($r) {
-            return ['dishId' => $r['dishId'], 'name' => $r['name'], 'cantidad' => $r['cantidad'], 'precioUnitario' => $r['precioUnitario']];
+            $it = ['dishId' => $r['dishId'], 'name' => $r['name'], 'cantidad' => $r['cantidad'], 'precioUnitario' => $r['precioUnitario']];
+            if ($r['adiciones']) $it['adiciones'] = $r['adiciones'];
+            return $it;
         }, $resueltos),
         'cargoDomicilio' => $cargoDomicilio,
         'total' => $total,
@@ -254,7 +313,8 @@ if ($resendKey && $ownerEmail) {
     $esc = fn($t) => htmlspecialchars((string) $t, ENT_QUOTES, 'UTF-8');
     $itemsHtml = '';
     foreach ($order['items'] as $it) {
-        $itemsHtml .= $it['cantidad'] . ' x ' . $esc($it['name']) . ' - $' . number_format($it['precioUnitario'] * $it['cantidad'], 0, ',', '.') . '<br>';
+        $extras = !empty($it['adiciones']) ? ' (' . implode(' ', array_map(fn($a) => '+ ' . $esc($a['name']), $it['adiciones'])) . ')' : '';
+        $itemsHtml .= $it['cantidad'] . ' x ' . $esc($it['name']) . $extras . ' - $' . number_format($it['precioUnitario'] * $it['cantidad'], 0, ',', '.') . '<br>';
     }
     $tipoEntregaLabel = ['domicilio' => 'A domicilio', 'recoger' => 'Para recoger', 'comer_aqui' => 'Comer aquí'][$tipoEntrega] ?? $tipoEntrega;
     $html = "<h2>Nuevo pedido #{$orderId}</h2>" .

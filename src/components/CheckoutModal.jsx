@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { formatCurrency } from '../lib/format';
 import TermsButton from './TermsButton';
+import NequiPago from './NequiPago';
 
 export default function CheckoutModal({ totalsForEntrega, onClose, onSubmit, initialTipoEntrega }) {
   const [tipoEntrega, setTipoEntrega] = useState(initialTipoEntrega || 'domicilio');
@@ -76,9 +77,11 @@ export default function CheckoutModal({ totalsForEntrega, onClose, onSubmit, ini
             Método de pago
             <select value={metodoPago} onChange={(e) => setMetodoPago(e.target.value)} style={inputStyle}>
               <option value="efectivo">Efectivo</option>
-              <option value="nequi">Nequi</option>
+              <option value="nequi">Nequi / Daviplata</option>
             </select>
           </label>
+
+          {metodoPago === 'nequi' && <NequiPago total={totals.total} />}
 
           <div style={totalsBox}>
             <div style={totalsRow}><span>Subtotal</span><span>{formatCurrency(totals.subtotal)}</span></div>
@@ -109,7 +112,7 @@ export default function CheckoutModal({ totalsForEntrega, onClose, onSubmit, ini
 }
 
 const overlayStyle = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16 };
-const cardStyle = { background: '#fff', border: '2px solid var(--brand-card-border)', borderRadius: 16, padding: '24px 28px', width: 380, maxWidth: '100%', maxHeight: '88vh', overflowY: 'auto', position: 'relative' };
+const cardStyle = { background: '#fff', border: '2px solid var(--brand-card-border)', borderRadius: 16, padding: '24px 28px', width: 380, maxWidth: '100%', maxHeight: '78vh', overflowY: 'auto', position: 'relative' };
 const closeBtnStyle = { position: 'absolute', top: 10, right: 14, background: 'transparent', border: 'none', color: 'var(--brand-text-dark)', fontSize: 22, cursor: 'pointer' };
 const titleStyle = { fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 22, marginTop: 0, color: 'var(--brand-text-dark)' };
 const labelStyle = { fontSize: 13, color: '#6b5a4d', display: 'flex', flexDirection: 'column', gap: 4 };

@@ -7,7 +7,6 @@ import PrivacyButton from './components/PrivacyButton';
 import TermsButton from './components/TermsButton';
 import { useData } from './context/DataContext';
 import { useAuth } from './context/AuthContext';
-import Home from './pages/Home';
 import Menu from './pages/Menu';
 import About from './pages/About';
 import MiCuenta from './pages/MiCuenta';
@@ -38,12 +37,12 @@ export default function App() {
       <NavBar onOpenLogin={() => setShowLogin(true)} />
       <main>
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<Navigate to="/menu" replace />} />
           <Route path="/menu" element={<Menu />} />
           <Route path="/acerca-de" element={<About />} />
-          <Route path="/mi-cuenta" element={user ? <MiCuenta /> : <Navigate to="/" replace />} />
-          <Route path="/admin" element={isAdmin ? <AdminDashboard /> : <Navigate to="/" replace />} />
-          <Route path="*" element={<Home />} />
+          <Route path="/mi-cuenta" element={user ? <MiCuenta /> : <Navigate to="/menu" replace />} />
+          <Route path="/admin" element={isAdmin ? <AdminDashboard /> : <Navigate to="/menu" replace />} />
+          <Route path="*" element={<Navigate to="/menu" replace />} />
         </Routes>
       </main>
       <SocialFloat />

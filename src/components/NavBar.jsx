@@ -20,9 +20,6 @@ export default function NavBar({ onOpenLogin }) {
 
       {!viewingAdmin && (
         <nav className="nav-links">
-          <NavLink to="/" end className={({ isActive }) => (isActive ? 'active' : '')}>
-            Inicio
-          </NavLink>
           <NavLink to="/menu" className={({ isActive }) => (isActive ? 'active' : '')}>
             Menú
           </NavLink>

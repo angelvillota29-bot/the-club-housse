@@ -4,9 +4,10 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../hooks/useCart';
 import { buildPublicMenu, isBusinessOpen } from '../lib/menu';
-import { formatCurrency, nombreDiaHoy } from '../lib/format';
+import { formatCurrency, nombreDiaHoy, parseCurrencyNumber } from '../lib/format';
 import CartPanel from '../components/CartPanel';
 import CheckoutModal from '../components/CheckoutModal';
+import NequiPago from '../components/NequiPago';
 import { placeOrder } from '../lib/api';
 
 const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
@@ -30,6 +31,13 @@ export default function Menu() {
     cartState.addToCart(dishId, day);
   };
 
+  // Adicionales y bebidas que se ofrecen dentro del carrito, tomados del mismo
+  // menú de hoy (solo lo que no está agotado).
+  const aOpcion = (d) => ({ dishId: d.id, name: d.name, price: parseCurrencyNumber(d.price) });
+  const adiciones = useMemo(() => groups.filter((g) => g.kind.esAdicion).flatMap((g) => g.dishes.filter((d) => !d.isSoldOut).map(aOpcion)), [groups]);
+  const bebidas = useMemo(() => groups.filter((g) => g.kind.esBebida).flatMap((g) => g.dishes.filter((d) => !d.isSoldOut).map(aOpcion)), [groups]);
+  const puedePedir = esHoy && open;
+
   const submitOrder = async ({ nombre, direccion, telefono, nota, tipoEntrega, metodoPago }) => {
     const payload = {
       day: esUnico ? undefined : day,
@@ -38,13 +46,13 @@ export default function Menu() {
       canal: 'pagina',
       metodoPago,
       menuMode: state.menuMode,
-      items: cartState.cart.map((i) => ({ dishId: i.dishId, cantidad: i.cantidad })),
+      items: cartState.cart.map((i) => ({ dishId: i.dishId, cantidad: i.cantidad, adiciones: (i.adiciones || []).map((a) => a.dishId) })),
       accountEmail: user || undefined,
     };
     const result = await placeOrder(payload);
     if (result.success) {
       setCheckoutOpen(false);
-      setConfirmedOrder(result);
+      setConfirmedOrder({ ...result, metodoPago });
       cartState.clearCart();
       await refresh();
     }
@@ -82,40 +90,52 @@ export default function Menu() {
 
       <div style={{ marginTop: 24 }}>
         {groups.length === 0 && <p style={{ color: '#a68f78', fontSize: 14 }}>No hay platillos para este día.</p>}
-        {groups.map(({ category, dishes }) => (
-          <div key={category.id} style={{ marginBottom: 26 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
-              <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 19, margin: 0, color: 'var(--brand-text-dark)' }}>
-                {category.name}
-              </h2>
-              {category.deliveryEnabled === false && <span style={{ fontSize: 11, color: 'var(--brand-danger)' }}>No disponible a domicilio</span>}
-            </div>
+        {groups.map(({ category, dishes, kind }) => {
+          if (kind.esAdicion) return <AdicionesInfo key={category.id} category={category} dishes={dishes} />;
+          if (kind.agrupada) return <FamilyCard key={category.id} category={category} dishes={dishes} puedePedir={puedePedir} onAdd={handleAdd} />;
+          return (
+            <div key={category.id} style={{ marginBottom: 26 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
+                <h2 style={tituloCategoria}>{category.name}</h2>
+                {category.deliveryEnabled === false && <span style={{ fontSize: 11, color: 'var(--brand-danger)' }}>No disponible a domicilio</span>}
+              </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12 }}>
-              {dishes.map((dish) => (
-                <div key={dish.id} className="dish-card" style={{ opacity: dish.isSoldOut ? 0.5 : 1 }}>
-                  {dish.imageUrl ? <img src={dish.imageUrl} alt={dish.name} /> : <div className="dish-img-placeholder" />}
-                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13, color: 'var(--brand-text-dark)' }}>{dish.name}</div>
-                  {dish.desc && <div style={{ fontSize: 11, color: '#a68f78', marginTop: 2 }}>{dish.desc}</div>}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-                    <span style={{ color: 'var(--brand-orange)', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 13, whiteSpace: 'nowrap' }}>
-                      {formatCurrency(dish.priceWithFees)}
-                    </span>
-                    {!dish.isSoldOut && esHoy && open && (
-                      <button onClick={() => handleAdd(dish.id)} className="btn-pill btn-orange" style={{ fontSize: 11, padding: '4px 10px' }}>
-                        + Agregar
-                      </button>
-                    )}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12 }}>
+                {dishes.map((dish) => (
+                  <div key={dish.id} className="dish-card" style={{ opacity: dish.isSoldOut ? 0.5 : 1 }}>
+                    {dish.imageUrl ? <img src={dish.imageUrl} alt={dish.name} /> : <div className="dish-img-placeholder" />}
+                    <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13, color: 'var(--brand-text-dark)' }}>{dish.name}</div>
+                    {dish.desc && <div style={{ fontSize: 11, color: '#a68f78', marginTop: 2 }}>{dish.desc}</div>}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                      <span style={{ color: 'var(--brand-orange)', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 13, whiteSpace: 'nowrap' }}>
+                        {formatCurrency(dish.priceWithFees)}
+                      </span>
+                      {!dish.isSoldOut && puedePedir && (
+                        <button onClick={() => handleAdd(dish.id)} className="btn-pill btn-orange" style={{ fontSize: 11, padding: '4px 10px' }}>
+                          + Agregar
+                        </button>
+                      )}
+                    </div>
+                    {dish.isSoldOut && <div style={{ fontSize: 11, color: 'var(--brand-danger)', marginTop: 4 }}>Agotado</div>}
                   </div>
-                  {dish.isSoldOut && <div style={{ fontSize: 11, color: 'var(--brand-danger)', marginTop: 4 }}>Agotado</div>}
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      <CartPanel cart={cartState.cart} subtotal={cartState.subtotal} onQty={cartState.changeQty} onRemove={cartState.removeItem} onCheckout={() => setCheckoutOpen(true)} />
+      <CartPanel
+        cart={cartState.cart}
+        subtotal={cartState.subtotal}
+        adiciones={adiciones}
+        bebidas={bebidas}
+        onQty={cartState.changeQty}
+        onRemove={cartState.removeItem}
+        onToggleAdicion={cartState.toggleAdicion}
+        onAddBebida={handleAdd}
+        onCheckout={() => setCheckoutOpen(true)}
+      />
 
       {checkoutOpen && (
         <CheckoutModal
@@ -133,6 +153,7 @@ export default function Menu() {
             <p style={{ fontSize: 14, color: '#5c4a3a' }}>
               Tu pedido #{confirmedOrder.orderId} por {formatCurrency(confirmedOrder.total)} fue recibido.
             </p>
+            {confirmedOrder.metodoPago === 'nequi' && <NequiPago total={confirmedOrder.total} />}
             <button className="btn-pill btn-orange" onClick={() => setConfirmedOrder(null)}>
               Listo
             </button>
@@ -143,5 +164,66 @@ export default function Menu() {
   );
 }
 
+// Familia de productos con variantes (salchipapas, burguers, perros, colitas):
+// UNA sola tarjeta con UNA sola foto y la lista de variantes con su precio.
+function FamilyCard({ category, dishes, puedePedir, onAdd }) {
+  const foto = category.imageUrl || dishes.find((d) => d.imageUrl)?.imageUrl;
+  return (
+    <section className="family-card" style={{ marginBottom: 26 }}>
+      {foto ? <img className="family-photo" src={foto} alt={category.name} /> : <div className="family-photo dish-img-placeholder" />}
+      <div style={{ padding: '14px 16px 8px' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+          <h2 style={tituloCategoria}>{category.name}</h2>
+          {category.deliveryEnabled === false && <span style={{ fontSize: 11, color: 'var(--brand-danger)' }}>No disponible a domicilio</span>}
+        </div>
+        <p style={{ fontSize: 12, color: '#a68f78', margin: '2px 0 6px' }}>
+          Elige la que más te provoque{puedePedir ? ' y agrégala; luego podrás ponerle adicionales.' : '.'}
+        </p>
+      </div>
+      <ul className="family-list">
+        {dishes.map((dish) => (
+          <li key={dish.id} className="family-row" style={{ opacity: dish.isSoldOut ? 0.5 : 1 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14, color: 'var(--brand-text-dark)' }}>{dish.name}</div>
+              {dish.desc && <div style={{ fontSize: 11, color: '#a68f78', marginTop: 1 }}>{dish.desc}</div>}
+              {dish.isSoldOut && <div style={{ fontSize: 11, color: 'var(--brand-danger)', marginTop: 2 }}>Agotado</div>}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <span style={{ color: 'var(--brand-orange)', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 14, whiteSpace: 'nowrap' }}>
+                {formatCurrency(dish.priceWithFees)}
+              </span>
+              {!dish.isSoldOut && puedePedir && (
+                <button onClick={() => onAdd(dish.id)} className="btn-pill btn-orange" style={{ fontSize: 12, padding: '5px 12px' }}>
+                  + Agregar
+                </button>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+// Lista informativa de adicionales: no se piden sueltos, se eligen producto por
+// producto al revisar el pedido.
+function AdicionesInfo({ category, dishes }) {
+  return (
+    <section style={{ marginBottom: 26 }}>
+      <h2 style={tituloCategoria}>{category.name}</h2>
+      <p style={{ fontSize: 12, color: '#a68f78', margin: '2px 0 10px' }}>Se eligen en tu pedido, producto por producto (salchipapas, burguers, perros y colitas).</p>
+      <ul className="adiciones-lista">
+        {dishes.map((d) => (
+          <li key={d.id} style={{ opacity: d.isSoldOut ? 0.5 : 1 }}>
+            <span>{d.name}</span>
+            <strong>{formatCurrency(d.price)}</strong>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+const tituloCategoria = { fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 19, margin: 0, color: 'var(--brand-text-dark)' };
 const overlayStyle = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: 16 };
 const cardStyle = { background: '#fff', border: '2px solid var(--brand-card-border)', borderRadius: 16, padding: '24px 28px', width: 340, maxWidth: '100%' };

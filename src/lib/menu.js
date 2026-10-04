@@ -42,6 +42,28 @@ export function isBusinessOpen(businessOpenConfig) {
   return s <= e ? nowMin >= s && nowMin < e : nowMin >= s || nowMin < e;
 }
 
+// Tipo de cada categoría. Si la categoría trae la marca explícita (se puede
+// cambiar en Administración > Categorías) manda esa; si no, se deduce del
+// nombre para que el menú actual funcione sin tener que editar nada.
+//   agrupada       -> variantes en UNA sola tarjeta con una sola foto
+//   personalizable -> cada producto se puede pedir con adicionales
+//   esAdicion      -> son los adicionales (no se piden sueltos)
+//   esBebida       -> se ofrecen como sugerencia al confirmar el pedido
+const normNombre = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+const FAMILIAS = ['salchipapas', 'burguer', 'burger', 'hamburguesas', 'perros', 'colitas'];
+const BEBIDAS = ['bebidas', 'gaseosas'];
+
+export function categoryKind(cat) {
+  const n = normNombre(cat?.name);
+  const pick = (campo, porDefecto) => (cat && cat[campo] !== undefined && cat[campo] !== null ? !!cat[campo] : porDefecto);
+  return {
+    agrupada: pick('agrupada', FAMILIAS.includes(n)),
+    personalizable: pick('personalizable', FAMILIAS.includes(n)),
+    esAdicion: pick('esAdicion', n === 'adiciones'),
+    esBebida: pick('esBebida', BEBIDAS.includes(n)),
+  };
+}
+
 export function buildPublicMenu(state, day, tipoEntrega) {
   const esUnico = state.menuMode === 'unico';
   const items = esUnico ? state.singleMenuSchedule : state.schedule.filter((s) => s.day === day);
@@ -59,7 +81,7 @@ export function buildPublicMenu(state, day, tipoEntrega) {
           return { ...dish, available: s.available, stock: s.stock, isSoldOut, priceWithFees };
         })
         .filter(Boolean);
-      return { category: cat, dishes };
+      return { category: cat, dishes, kind: categoryKind(cat) };
     })
     .filter((group) => group.dishes.length > 0);
 }
