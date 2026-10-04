@@ -22,6 +22,15 @@ export async function uploadImage(file) {
   return result.success ? result.url : null;
 }
 
+export async function calcularEnvio(direccion) {
+  const res = await fetch('api/calcular-envio.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ direccion }),
+  });
+  return res.json();
+}
+
 export async function placeOrder(payload) {
   const res = await fetch('api/place-order.php', {
     method: 'POST',

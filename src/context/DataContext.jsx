@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { loadAllData, saveAllData, ensureObject } from '../lib/api';
 import { fechaHoyBogota } from '../lib/format';
+import { normalizeEnvio } from '../lib/envio';
 
 const DataContext = createContext(null);
 
@@ -43,6 +44,7 @@ function normalize(raw) {
       takeoutConfig: ensureObject(raw.takeoutConfig, DEFAULT_TAKEOUT),
       businessOpenConfig: ensureObject(raw.businessOpenConfig, DEFAULT_OPEN),
       deliveryZoneConfig: ensureObject(raw.deliveryZoneConfig, DEFAULT_DELIVERY_ZONE),
+      deliveryFeeConfig: normalizeEnvio(raw.deliveryFeeConfig),
       brandingConfig: ensureObject(raw.brandingConfig, {}),
       usersData: raw.usersData || [],
       n8nConfig: ensureObject(raw.n8nConfig, { apiKey: '' }),

@@ -49,13 +49,14 @@ export default function Menu() {
     [groups],
   );
 
-  const submitOrder = async ({ nombre, direccion, telefono, nota, tipoEntrega, metodoPago }) => {
+  const submitOrder = async ({ nombre, direccion, telefono, nota, tipoEntrega, metodoPago, envioToken }) => {
     const payload = {
       day: esUnico ? undefined : day,
       tipoEntrega,
       cliente: { nombre, direccion, telefono, nota },
       canal: 'pagina',
       metodoPago,
+      envioToken: envioToken || undefined,
       menuMode: state.menuMode,
       items: cartState.cart.map((i) => ({ dishId: i.dishId, cantidad: i.cantidad, adiciones: (i.adiciones || []).map((a) => a.dishId) })),
       accountEmail: user || undefined,
@@ -152,6 +153,7 @@ export default function Menu() {
       {checkoutOpen && (
         <CheckoutModal
           totalsForEntrega={cartState.totalsForEntrega}
+          envioActivo={!!state.deliveryFeeConfig?.enabled}
           initialTipoEntrega={location.state?.tipoEntrega}
           onClose={() => setCheckoutOpen(false)}
           onSubmit={submitOrder}

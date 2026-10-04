@@ -8,6 +8,7 @@ import Customize from './sections/Customize';
 import Orders from './sections/Orders';
 import Users from './sections/Users';
 import N8n from './sections/N8n';
+import Envio from './sections/Envio';
 
 const TABS = [
   { key: 'categories', label: 'Categorías' },
@@ -15,6 +16,7 @@ const TABS = [
   { key: 'customize', label: 'Personalizar' },
   { key: 'dishes', label: 'Platillos' },
   { key: 'schedule', label: 'Horario y Stock' },
+  { key: 'envio', label: 'Domicilio', superOnly: true },
   { key: 'orders', label: 'Pedidos', superOnly: true },
   { key: 'n8n', label: 'Conexión N8N', superOnly: true },
   { key: 'users', label: 'Usuarios', superOnly: true },
@@ -47,6 +49,7 @@ export default function AdminDashboard() {
       {tab === 'schedule' && <Schedule />}
       {tab === 'availability' && <Availability />}
       {tab === 'customize' && <Customize />}
+      {tab === 'envio' && <Envio />}
       {tab === 'orders' && <Orders />}
       {tab === 'users' && <Users />}
       {tab === 'n8n' && <N8n />}

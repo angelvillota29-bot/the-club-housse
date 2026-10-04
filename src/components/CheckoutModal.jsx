@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { formatCurrency } from '../lib/format';
+import { calcularEnvio, getConfigStatus } from '../lib/api';
 import TermsButton from './TermsButton';
 import NequiPago from './NequiPago';
 
-export default function CheckoutModal({ totalsForEntrega, onClose, onSubmit, initialTipoEntrega }) {
+export default function CheckoutModal({ totalsForEntrega, onClose, onSubmit, initialTipoEntrega, envioActivo }) {
   const [tipoEntrega, setTipoEntrega] = useState(initialTipoEntrega || 'domicilio');
   const [metodoPago, setMetodoPago] = useState('efectivo');
   const [form, setForm] = useState({ nombre: '', direccion: '', telefono: '', nota: '' });
@@ -12,9 +13,55 @@ export default function CheckoutModal({ totalsForEntrega, onClose, onSubmit, ini
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
 
+  // Domicilio por distancia: solo aplica si está activo en el panel Y el servidor
+  // tiene conectada la clave de Google. Si no, se cobra el domicilio de siempre.
+  const [mapsOk, setMapsOk] = useState(null);
+  const [quote, setQuote] = useState(null);
+  const [calculando, setCalculando] = useState(false);
+  const [envioError, setEnvioError] = useState('');
+  const [envioApagado, setEnvioApagado] = useState(false);
+  useEffect(() => {
+    if (!envioActivo) return;
+    getConfigStatus()
+      .then((s) => setMapsOk(!!s.mapsConfigured))
+      .catch(() => setMapsOk(false));
+  }, [envioActivo]);
+  const envioOn = !!envioActivo && mapsOk === true && !envioApagado;
+
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
-  const totals = useMemo(() => totalsForEntrega(tipoEntrega), [totalsForEntrega, tipoEntrega]);
   const needsAddress = tipoEntrega === 'domicilio';
+  const totals = useMemo(() => {
+    const t = totalsForEntrega(tipoEntrega);
+    if (needsAddress && envioOn && quote) return { ...t, domicilio: quote.costo, total: t.subtotal + t.empaque + quote.costo };
+    return t;
+  }, [totalsForEntrega, tipoEntrega, needsAddress, envioOn, quote]);
+
+  // Si el cliente cambia la dirección después de calcular, hay que recalcular.
+  useEffect(() => {
+    if (quote && form.direccion.trim() !== quote.consultada) setQuote(null);
+  }, [form.direccion, quote]);
+
+  const calcular = async () => {
+    const direccion = form.direccion.trim();
+    if (!direccion) return;
+    setCalculando(true);
+    setEnvioError('');
+    setQuote(null);
+    try {
+      const r = await calcularEnvio(direccion);
+      if (r.ok && !r.fueraDeZona) {
+        setQuote({ ...r, consultada: direccion });
+      } else if (r.codigo === 'desactivado' || r.codigo === 'no_configurado') {
+        setEnvioApagado(true); // el servidor no lo tiene listo: se cobra el domicilio de siempre
+      } else {
+        setEnvioError(r.error || 'No se pudo calcular el domicilio.');
+      }
+    } catch {
+      setEnvioError('No se pudo calcular el domicilio. Intenta de nuevo.');
+    }
+    setCalculando(false);
+  };
+
   const needsPhone = tipoEntrega !== 'comer_aqui';
 
   const submit = async (e) => {
@@ -27,9 +74,13 @@ export default function CheckoutModal({ totalsForEntrega, onClose, onSubmit, ini
       setError('La dirección es obligatoria para domicilio.');
       return;
     }
+    if (needsAddress && envioOn && !quote) {
+      setError('Calcula el costo del domicilio con tu dirección antes de enviar el pedido.');
+      return;
+    }
     setSending(true);
     setError('');
-    const result = await onSubmit({ ...form, tipoEntrega, metodoPago });
+    const result = await onSubmit({ ...form, tipoEntrega, metodoPago, envioToken: needsAddress && envioOn ? quote?.token : undefined });
     setSending(false);
     if (!result?.success) {
       setError(result?.error || 'No se pudo procesar el pedido.');
@@ -60,8 +111,27 @@ export default function CheckoutModal({ totalsForEntrega, onClose, onSubmit, ini
           {needsAddress && (
             <label style={labelStyle}>
               Dirección de entrega
-              <input required value={form.direccion} onChange={set('direccion')} style={inputStyle} />
+              <input required value={form.direccion} onChange={set('direccion')} style={inputStyle} placeholder={envioOn ? 'Ej. Cra 26 # 94-10, Marroquín I' : undefined} />
             </label>
+          )}
+          {needsAddress && envioOn && (
+            <div>
+              <button type="button" className="btn-pill btn-outline" onClick={calcular} disabled={calculando || !form.direccion.trim()} style={{ fontSize: 13, padding: '6px 14px' }}>
+                📍 {calculando ? 'Calculando…' : quote ? 'Recalcular domicilio' : 'Calcular domicilio'}
+              </button>
+              {envioError && <p style={{ color: 'var(--brand-danger)', fontSize: 12, margin: '6px 0 0' }}>{envioError}</p>}
+              {quote && (
+                <div style={{ background: 'var(--brand-card-tint)', borderRadius: 10, padding: '8px 12px', marginTop: 8, fontSize: 12, color: '#4a3c30', lineHeight: 1.6 }}>
+                  <div>📍 {quote.direccion}{quote.aproximada ? ' (ubicación aproximada)' : ''}</div>
+                  {quote.barrio && <div>Barrio: <strong>{quote.barrio}</strong></div>}
+                  <div>
+                    Distancia: <strong>{String(quote.distanciaKm).replace('.', ',')} km</strong>
+                    {quote.minutos ? ` · unos ${quote.minutos} min` : ''} · Domicilio: <strong>{formatCurrency(quote.costo)}</strong>
+                  </div>
+                  {quote.aproximada && <div style={{ color: 'var(--brand-orange-deep)' }}>Si la ubicación no es la correcta, agrega el barrio y el número exacto y recalcula.</div>}
+                </div>
+              )}
+            </div>
           )}
           {needsPhone && (
             <label style={labelStyle}>

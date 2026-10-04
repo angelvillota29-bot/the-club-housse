@@ -6,6 +6,7 @@
 // API Key: lo llama el navegador del cliente, igual que save-data.php.
 require_once __DIR__ . '/_auth.php';
 require_once __DIR__ . '/_ratelimit.php';
+require_once __DIR__ . '/_envio.php';
 
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -68,6 +69,21 @@ if ($nombre === '' || ($tipoEntrega !== 'comer_aqui' && $telefono === '') || emp
     respuestaError(400, 'Faltan datos del pedido (nombre, dirección, teléfono o platillos)');
 }
 if (count($items) > 40) respuestaError(400, 'El pedido tiene demasiados platillos distintos');
+
+// Domicilio por distancia (solo si está activo Y conectado a Google): el costo
+// sale de un token firmado que entrega calcular-envio.php para ESTA dirección;
+// nunca de lo que diga el navegador. Si no está activo, rige el cargo fijo.
+$cargoEnvio = null;
+$envioDatos = null;
+if ($tipoEntrega === 'domicilio') {
+    $dataEnvio = dataLeer();
+    if (envioConfig(is_array($dataEnvio) ? $dataEnvio : [])['enabled'] && envioClave() !== '') {
+        $qv = envioTokenValido($input['envioToken'] ?? '', $direccion);
+        if (!$qv) respuestaError(409, 'Calcula el costo del domicilio con tu dirección antes de enviar el pedido.');
+        $cargoEnvio = $qv['costo'];
+        $envioDatos = ['costo' => $qv['costo'], 'distanciaKm' => $qv['distanciaKm'], 'barrio' => $qv['barrio']];
+    }
+}
 
 // Cada línea es un producto con SUS propios adicionales (ej. una colita con
 // queso y nuggets). Los adicionales llegan solo como ids: el nombre y el precio
@@ -155,7 +171,7 @@ $orderId = (int) round(microtime(true) * 1000);
 
 // Todo lo que lee y cambia el almacén de datos ocurre con el candado tomado:
 // dos pedidos simultáneos ya no se pisan ni descuentan el mismo stock dos veces.
-$res = dataMutar(function (&$data) use ($lineas, $day, $nombre, $direccion, $telefono, $nota, $tipoEntrega, $canal, $metodoPago, $accountEmail, $hoy, $hoyFecha, $orderId) {
+$res = dataMutar(function (&$data) use ($cargoEnvio, $envioDatos, $lineas, $day, $nombre, $direccion, $telefono, $nota, $tipoEntrega, $canal, $metodoPago, $accountEmail, $hoy, $hoyFecha, $orderId) {
     // El modo de menú sale de lo guardado en el servidor, no de lo que diga el
     // navegador (antes se podía pedir "modo único" para saltarse el día).
     $menuMode = ($data['menuMode'] ?? 'semanal') === 'unico' ? 'unico' : 'semanal';
@@ -246,7 +262,9 @@ $res = dataMutar(function (&$data) use ($lineas, $day, $nombre, $direccion, $tel
 
     // Cargo de domicilio: UNA vez por pedido (no por platillo), solo cuando se
     // entrega a domicilio.
-    $cargoDomicilio = ($tipoEntrega === 'domicilio' && !empty($takeoutConfig['enabled'])) ? (int) ($takeoutConfig['domicilioFee'] ?? 0) : 0;
+    $cargoDomicilio = $cargoEnvio !== null
+        ? $cargoEnvio
+        : (($tipoEntrega === 'domicilio' && !empty($takeoutConfig['enabled'])) ? (int) ($takeoutConfig['domicilioFee'] ?? 0) : 0);
     $total += $cargoDomicilio;
 
     // Todo válido -- descuenta stock (solo donde el stock se controla; null =
@@ -283,6 +301,7 @@ $res = dataMutar(function (&$data) use ($lineas, $day, $nombre, $direccion, $tel
         // de Pedidos cuando el cajero confirma el pago (api/confirm-payment.php).
         'pagoConfirmado' => false,
     ];
+    if ($envioDatos) $order['envio'] = $envioDatos;
     $data['ordersData'][] = $order;
     // Registro PERMANENTE: a diferencia de ordersData (la cola de cocina, que se
     // vacía al eliminar el ticket), este nunca se borra desde el Receptor de
