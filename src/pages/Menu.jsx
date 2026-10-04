@@ -103,6 +103,7 @@ export default function Menu() {
         {groups.length === 0 && <p style={{ color: '#a68f78', fontSize: 14 }}>No hay platillos para este día.</p>}
         {gruposOrdenados.map(({ category, dishes, kind }) => {
           if (kind.esAdicion) return <AdicionesInfo key={category.id} category={category} dishes={dishes} />;
+          if (kind.esBebida) return <FamilyCard key={category.id} category={category} dishes={dishes} puedePedir={puedePedir} onAdd={handleAdd} sinFoto />;
           if (kind.agrupada) return <FamilyCard key={category.id} category={category} dishes={dishes} puedePedir={puedePedir} onAdd={handleAdd} />;
           return (
             <div key={category.id} style={{ marginBottom: 26 }}>
@@ -181,19 +182,21 @@ const FOTOS_FAMILIA = { colitas: '/familia-colitas.jpg' };
 
 // Familia de productos con variantes (salchipapas, burguers, perros, colitas):
 // UNA sola tarjeta con UNA sola foto y la lista de variantes con su precio.
-function FamilyCard({ category, dishes, puedePedir, onAdd }) {
-  const foto = category.imageUrl || FOTOS_FAMILIA[String(category.name).toLowerCase().trim()] || dishes.find((d) => d.imageUrl)?.imageUrl;
+function FamilyCard({ category, dishes, puedePedir, onAdd, sinFoto }) {
+  const foto = sinFoto ? null : category.imageUrl || FOTOS_FAMILIA[String(category.name).toLowerCase().trim()] || dishes.find((d) => d.imageUrl)?.imageUrl;
   return (
     <section className="family-card" style={{ marginBottom: 26 }}>
-      {foto ? <img className="family-photo" src={foto} alt={category.name} /> : <div className="family-photo dish-img-placeholder" />}
+      {!sinFoto && (foto ? <img className="family-photo" src={foto} alt={category.name} /> : <div className="family-photo dish-img-placeholder" />)}
       <div style={{ padding: '14px 16px 8px' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
           <h2 style={tituloCategoria}>{category.name}</h2>
           {category.deliveryEnabled === false && <span style={{ fontSize: 11, color: 'var(--brand-danger)' }}>No disponible a domicilio</span>}
         </div>
-        <p style={{ fontSize: 12, color: '#a68f78', margin: '2px 0 6px' }}>
-          Elige la que más te provoque{puedePedir ? ' y agrégala; luego podrás ponerle adicionales.' : '.'}
-        </p>
+        {!sinFoto && (
+          <p style={{ fontSize: 12, color: '#a68f78', margin: '2px 0 6px' }}>
+            Elige la que más te provoque{puedePedir ? ' y agrégala; luego podrás ponerle adicionales.' : '.'}
+          </p>
+        )}
       </div>
       <ul className="family-list">
         {dishes.map((dish) => (
