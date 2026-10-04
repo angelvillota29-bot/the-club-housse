@@ -175,10 +175,14 @@ export default function Menu() {
   );
 }
 
+// Foto propia de una familia (sándwich cubano para las colitas, que son como un
+// sándwich). Si la categoría trae su propia imagen, esa tiene prioridad.
+const FOTOS_FAMILIA = { colitas: '/familia-colitas.jpg' };
+
 // Familia de productos con variantes (salchipapas, burguers, perros, colitas):
 // UNA sola tarjeta con UNA sola foto y la lista de variantes con su precio.
 function FamilyCard({ category, dishes, puedePedir, onAdd }) {
-  const foto = category.imageUrl || dishes.find((d) => d.imageUrl)?.imageUrl;
+  const foto = category.imageUrl || FOTOS_FAMILIA[String(category.name).toLowerCase().trim()] || dishes.find((d) => d.imageUrl)?.imageUrl;
   return (
     <section className="family-card" style={{ marginBottom: 26 }}>
       {foto ? <img className="family-photo" src={foto} alt={category.name} /> : <div className="family-photo dish-img-placeholder" />}
