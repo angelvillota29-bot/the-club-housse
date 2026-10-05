@@ -5,6 +5,7 @@
 // (variable de entorno N8N_API_KEY, o data.n8nConfig.apiKey como respaldo).
 header('Content-Type: application/json');
 require_once __DIR__ . '/_data.php';
+require_once __DIR__ . '/_menu.php';
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 date_default_timezone_set('America/Bogota');
 
@@ -123,6 +124,7 @@ foreach ($diasAIncluir as $dia) {
             'name' => $dish['name'],
             'description' => $dish['desc'] ?? '',
             'category' => $cat['name'] ?? '',
+            'categoryId' => $dish['categoryId'] ?? null,
             'deliveryEnabled' => $cat['deliveryEnabled'] ?? true,
             'price' => $dish['price'] ?? '$ 0',
             'available' => $available,
@@ -137,8 +139,17 @@ foreach ($diasAIncluir as $dia) {
     $menuByDay[$dia] = $items;
 }
 
+// Categorías en el MISMO orden en que las muestra la página, con su tipo (el
+// bot arma el menú numerado con esto: sin bebidas/gaseosas/adicionales).
+$categoriasInfo = [];
+foreach ($categories as $c) {
+    $categoriasInfo[] = ['id' => $c['id'] ?? null, 'name' => $c['name'] ?? ''] + tipoCategoria($c);
+}
+
 echo json_encode([
     'success' => true,
+    'categorias' => $categoriasInfo,
+    'salsas' => opcionesSalsas($data),
     'appliedFilters' => ['day' => $resolvedDay],
     'menuMode' => $menuMode,
     'abierto' => $negocioAbierto,

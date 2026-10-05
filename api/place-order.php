@@ -7,6 +7,7 @@
 require_once __DIR__ . '/_auth.php';
 require_once __DIR__ . '/_ratelimit.php';
 require_once __DIR__ . '/_envio.php';
+require_once __DIR__ . '/_menu.php';
 
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -120,33 +121,6 @@ foreach ($items as $item) {
         }
     }
     $lineas[] = ['dishId' => $dishId, 'cantidad' => $cantidad, 'adiciones' => $adiciones, 'salsas' => $salsas];
-}
-
-// Tipo de categoría (mismas reglas que el menú de la página): si la categoría
-// trae la marca explícita manda esa; si no, se deduce del nombre.
-function normalizarNombre($s) {
-    $s = function_exists('mb_strtolower') ? mb_strtolower((string) $s, 'UTF-8') : strtolower((string) $s);
-    return trim(strtr($s, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n']));
-}
-// Salsas disponibles (sin costo). Se editan en Administración > Salsas.
-function opcionesSalsas($data) {
-    $def = ['Rosada', 'De ajo', 'De piña', 'Roja'];
-    $cfg = (is_array($data) && isset($data['salsasConfig']['opciones']) && is_array($data['salsasConfig']['opciones'])) ? $data['salsasConfig']['opciones'] : null;
-    if ($cfg === null) return $def;
-    $out = [];
-    foreach ($cfg as $o) {
-        if (is_string($o) && trim($o) !== '' && strlen($o) <= 60) $out[] = trim($o);
-    }
-    return $out;
-}
-function tipoCategoria($cat) {
-    $n = normalizarNombre($cat['name'] ?? '');
-    $familias = ['salchipapas', 'burguer', 'burger', 'hamburguesas', 'perros', 'colitas'];
-    return [
-        'esAdicion' => (is_array($cat) && array_key_exists('esAdicion', $cat) && $cat['esAdicion'] !== null) ? !empty($cat['esAdicion']) : $n === 'adiciones',
-        'personalizable' => (is_array($cat) && array_key_exists('personalizable', $cat) && $cat['personalizable'] !== null) ? !empty($cat['personalizable']) : in_array($n, $familias, true),
-        'salsas' => (is_array($cat) && array_key_exists('salsas', $cat) && $cat['salsas'] !== null) ? !empty($cat['salsas']) : $n === 'salchipapas',
-    ];
 }
 
 // ── Reinicio diario de stock (igual que en el navegador): cada fila con un
