@@ -21,10 +21,11 @@ export function useCart(state) {
         alert('Ese platillo ya no está disponible.');
         return;
       }
-      const personalizable = categoryKind(categoryForDish(state, dishId)).personalizable;
+      const kind = categoryKind(categoryForDish(state, dishId));
+      const personalizable = kind.personalizable;
       const nueva = { key: newCartKey(), dishId: item.id, name: item.name, price: parseCurrencyNumber(item.price), cantidad: 1 };
       setCart((prev) => {
-        if (personalizable) return [...prev, { ...nueva, personalizable: true, adiciones: [] }];
+        if (personalizable) return [...prev, { ...nueva, personalizable: true, adiciones: [], permiteSalsas: !!kind.salsas, salsas: [] }];
         const existing = prev.find((i) => i.dishId === dishId && !i.personalizable);
         if (existing) {
           return prev.map((i) => (i === existing ? { ...i, cantidad: i.cantidad + 1 } : i));
@@ -42,6 +43,17 @@ export function useCart(state) {
         if (i.key !== key) return i;
         const tiene = (i.adiciones || []).some((a) => a.dishId === adicion.dishId);
         return { ...i, adiciones: tiene ? i.adiciones.filter((a) => a.dishId !== adicion.dishId) : [...(i.adiciones || []), adicion] };
+      }),
+    );
+  }, []);
+
+  // Marca/desmarca una salsa (sin costo) de una línea del carrito.
+  const toggleSalsa = useCallback((key, nombre) => {
+    setCart((prev) =>
+      prev.map((i) => {
+        if (i.key !== key) return i;
+        const tiene = (i.salsas || []).includes(nombre);
+        return { ...i, salsas: tiene ? i.salsas.filter((s) => s !== nombre) : [...(i.salsas || []), nombre] };
       }),
     );
   }, []);
@@ -67,5 +79,5 @@ export function useCart(state) {
     [cart, subtotal, state],
   );
 
-  return { cart, addToCart, toggleAdicion, changeQty, removeItem, clearCart, subtotal, totalsForEntrega };
+  return { cart, addToCart, toggleAdicion, toggleSalsa, changeQty, removeItem, clearCart, subtotal, totalsForEntrega };
 }

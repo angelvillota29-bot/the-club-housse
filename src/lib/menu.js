@@ -52,6 +52,8 @@ export function isBusinessOpen(businessOpenConfig) {
 const normNombre = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
 const FAMILIAS = ['salchipapas', 'burguer', 'burger', 'hamburguesas', 'perros', 'colitas'];
 const BEBIDAS = ['bebidas', 'gaseosas'];
+const SALSAS_ELEGIR = ['salchipapas']; // el cliente elige las salsas (sin costo)
+const SALSAS_CASA = ['burguer', 'burger', 'hamburguesas', 'perros', 'colitas']; // llevan salsas de la casa
 
 export function categoryKind(cat) {
   const n = normNombre(cat?.name);
@@ -61,6 +63,8 @@ export function categoryKind(cat) {
     personalizable: pick('personalizable', FAMILIAS.includes(n)),
     esAdicion: pick('esAdicion', n === 'adiciones'),
     esBebida: pick('esBebida', BEBIDAS.includes(n)),
+    salsas: pick('salsas', SALSAS_ELEGIR.includes(n)),
+    salsasCasa: SALSAS_CASA.includes(n),
   };
 }
 

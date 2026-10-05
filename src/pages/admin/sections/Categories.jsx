@@ -3,7 +3,7 @@ import { useData } from '../../../context/DataContext';
 import { card, input, label, listItem, smallBtn, heading } from '../adminStyles';
 import { categoryKind } from '../../../lib/menu';
 
-const EMPTY = { name: '', deliveryEnabled: true, exentoEmpaque: false, agrupada: false, personalizable: false, esAdicion: false, esBebida: false };
+const EMPTY = { name: '', deliveryEnabled: true, exentoEmpaque: false, agrupada: false, personalizable: false, esAdicion: false, esBebida: false, salsas: false };
 
 export default function Categories() {
   const { state, save } = useData();
@@ -56,6 +56,9 @@ export default function Categories() {
           </label>
           <label style={{ ...label, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <input type="checkbox" checked={form.personalizable} onChange={set('personalizable')} /> Sus productos se pueden pedir con adicionales
+          </label>
+          <label style={{ ...label, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <input type="checkbox" checked={form.salsas} onChange={set('salsas')} /> Sus productos piden elegir salsas (sin costo)
           </label>
           <label style={{ ...label, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <input type="checkbox" checked={form.esAdicion} onChange={set('esAdicion')} /> Esta categoría es la lista de adicionales

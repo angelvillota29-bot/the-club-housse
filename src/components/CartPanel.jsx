@@ -4,21 +4,22 @@ import { precioUnitarioLinea } from '../hooks/useCart';
 
 // adiciones: [{ dishId, name, price }] disponibles para elegir en cada producto
 // personalizable. bebidas: [{ dishId, name, price }] sugeridas para agregar.
-export default function CartPanel({ cart, subtotal, adiciones = [], bebidas = [], onQty, onRemove, onToggleAdicion, onAddBebida, onCheckout }) {
+export default function CartPanel({ cart, subtotal, adiciones = [], bebidas = [], salsas = [], onQty, onRemove, onToggleAdicion, onToggleSalsa, onAddBebida, onCheckout }) {
   const [expanded, setExpanded] = useState(false);
   const [lineaAbierta, setLineaAbierta] = useState(null); // key de la línea con el selector de adicionales abierto
   const [verBebidas, setVerBebidas] = useState(false);
+  const [salsasAbierta, setSalsasAbierta] = useState(null); // key de la línea con el selector de salsas abierto
   if (cart.length === 0) return null;
 
   const platos = cart.reduce((sum, i) => sum + i.cantidad, 0);
-  const hayPersonalizables = cart.some((i) => i.personalizable) && adiciones.length > 0;
+  const hayPersonalizables = (cart.some((i) => i.personalizable) && adiciones.length > 0) || cart.some((i) => i.permiteSalsas && salsas.length > 0);
 
   if (!expanded) {
     return (
       <button onClick={() => setExpanded(true)} style={miniStyle}>
         <span>🛒 {platos} · {formatCurrency(subtotal)}</span>
         <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#e8b98a', marginTop: 2 }}>
-          {hayPersonalizables ? 'Toca para elegir adicionales y bebida' : 'Toca para ver tu pedido'}
+          {hayPersonalizables ? 'Toca para elegir salsas, adicionales y bebida' : 'Toca para ver tu pedido'}
         </span>
       </button>
     );
@@ -59,6 +60,31 @@ export default function CartPanel({ cart, subtotal, adiciones = [], bebidas = []
 
               {item.personalizable && (
                 <>
+                  {item.permiteSalsas && salsas.length > 0 && (
+                    <div style={{ marginTop: 4 }}>
+                      <div style={{ fontSize: 12, color: (item.salsas || []).length ? '#6b5a4d' : 'var(--brand-orange-deep)', fontWeight: (item.salsas || []).length ? 400 : 700 }}>
+                        {(item.salsas || []).length ? `Salsas: ${item.salsas.join(', ')}` : 'Elige las salsas (sin costo)'}
+                      </div>
+                      <button onClick={() => setSalsasAbierta(salsasAbierta === item.key ? null : item.key)} className="btn-pill btn-outline" style={{ fontSize: 12, padding: '4px 12px', marginTop: 4 }}>
+                        {salsasAbierta === item.key ? '▲ Listo' : (item.salsas || []).length ? '✏️ Cambiar salsas' : '🥫 Elegir salsas'}
+                      </button>
+                      {salsasAbierta === item.key && (
+                        <div style={adicionesBox}>
+                          <div style={{ fontSize: 12, color: '#6b5a4d', marginBottom: 6 }}>Marca las salsas que quieras (no tienen costo):</div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 6 }}>
+                            {salsas.map((nombre) => {
+                              const marcada = (item.salsas || []).includes(nombre);
+                              return (
+                                <button key={nombre} type="button" onClick={() => onToggleSalsa(item.key, nombre)} style={{ ...chipStyle, ...(marcada ? chipOn : null) }} aria-pressed={marcada}>
+                                  <span>{marcada ? '✓ ' : ''}{nombre}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {extras.length > 0 && (
                     <div style={{ fontSize: 12, color: '#6b5a4d', marginTop: 3 }}>
                       {extras.map((a) => `+ ${a.name}`).join('  ')}

@@ -58,7 +58,7 @@ export default function Menu() {
       metodoPago,
       envioToken: envioToken || undefined,
       menuMode: state.menuMode,
-      items: cartState.cart.map((i) => ({ dishId: i.dishId, cantidad: i.cantidad, adiciones: (i.adiciones || []).map((a) => a.dishId) })),
+      items: cartState.cart.map((i) => ({ dishId: i.dishId, cantidad: i.cantidad, adiciones: (i.adiciones || []).map((a) => a.dishId), salsas: i.permiteSalsas ? i.salsas || [] : undefined })),
       accountEmail: user || undefined,
     };
     const result = await placeOrder(payload);
@@ -105,7 +105,7 @@ export default function Menu() {
         {gruposOrdenados.map(({ category, dishes, kind }) => {
           if (kind.esAdicion) return <AdicionesInfo key={category.id} category={category} dishes={dishes} />;
           if (kind.esBebida) return <FamilyCard key={category.id} category={category} dishes={dishes} puedePedir={puedePedir} onAdd={handleAdd} sinFoto />;
-          if (kind.agrupada) return <FamilyCard key={category.id} category={category} dishes={dishes} puedePedir={puedePedir} onAdd={handleAdd} />;
+          if (kind.agrupada) return <FamilyCard key={category.id} category={category} dishes={dishes} puedePedir={puedePedir} onAdd={handleAdd} kind={kind} />;
           return (
             <div key={category.id} style={{ marginBottom: 26 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
@@ -143,9 +143,11 @@ export default function Menu() {
         subtotal={cartState.subtotal}
         adiciones={adiciones}
         bebidas={bebidas}
+        salsas={state.salsasConfig?.opciones || []}
         onQty={cartState.changeQty}
         onRemove={cartState.removeItem}
         onToggleAdicion={cartState.toggleAdicion}
+        onToggleSalsa={cartState.toggleSalsa}
         onAddBebida={handleAdd}
         onCheckout={() => setCheckoutOpen(true)}
       />
@@ -184,7 +186,7 @@ const FOTOS_FAMILIA = { colitas: '/familia-colitas.jpg' };
 
 // Familia de productos con variantes (salchipapas, burguers, perros, colitas):
 // UNA sola tarjeta con UNA sola foto y la lista de variantes con su precio.
-function FamilyCard({ category, dishes, puedePedir, onAdd, sinFoto }) {
+function FamilyCard({ category, dishes, puedePedir, onAdd, sinFoto, kind }) {
   const foto = sinFoto ? null : category.imageUrl || FOTOS_FAMILIA[String(category.name).toLowerCase().trim()] || dishes.find((d) => d.imageUrl)?.imageUrl;
   return (
     <section className="family-card" style={{ marginBottom: 26 }}>
@@ -197,6 +199,8 @@ function FamilyCard({ category, dishes, puedePedir, onAdd, sinFoto }) {
         {!sinFoto && (
           <p style={{ fontSize: 12, color: '#a68f78', margin: '2px 0 6px' }}>
             Elige la que más te provoque{puedePedir ? ' y agrégala; luego podrás ponerle adicionales.' : '.'}
+            {kind?.salsas && ' Tú eliges las salsas, sin costo.'}
+            {kind?.salsasCasa && ' Llevan salsas de la casa (poquitas).'}
           </p>
         )}
       </div>

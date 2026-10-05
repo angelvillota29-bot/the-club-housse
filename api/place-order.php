@@ -109,7 +109,17 @@ foreach ($items as $item) {
             if (!in_array($aId, $adiciones, true)) $adiciones[] = $aId;
         }
     }
-    $lineas[] = ['dishId' => $dishId, 'cantidad' => $cantidad, 'adiciones' => $adiciones];
+    // Salsas (sin costo): llegan como nombres de texto y se validan contra la lista
+    // configurada en el servidor; aquí solo se comprueba la forma.
+    $salsas = [];
+    if (isset($item['salsas'])) {
+        if (!is_array($item['salsas']) || count($item['salsas']) > 8) respuestaError(400, 'Las salsas del pedido no son válidas');
+        foreach ($item['salsas'] as $sa) {
+            if (!is_string($sa) || trim($sa) === '' || strlen($sa) > 60) respuestaError(400, 'Una de las salsas de tu pedido no es válida');
+            $salsas[] = trim($sa);
+        }
+    }
+    $lineas[] = ['dishId' => $dishId, 'cantidad' => $cantidad, 'adiciones' => $adiciones, 'salsas' => $salsas];
 }
 
 // Tipo de categoría (mismas reglas que el menú de la página): si la categoría
@@ -118,12 +128,24 @@ function normalizarNombre($s) {
     $s = function_exists('mb_strtolower') ? mb_strtolower((string) $s, 'UTF-8') : strtolower((string) $s);
     return trim(strtr($s, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n']));
 }
+// Salsas disponibles (sin costo). Se editan en Administración > Salsas.
+function opcionesSalsas($data) {
+    $def = ['Rosada', 'De ajo', 'De piña', 'Roja'];
+    $cfg = (is_array($data) && isset($data['salsasConfig']['opciones']) && is_array($data['salsasConfig']['opciones'])) ? $data['salsasConfig']['opciones'] : null;
+    if ($cfg === null) return $def;
+    $out = [];
+    foreach ($cfg as $o) {
+        if (is_string($o) && trim($o) !== '' && strlen($o) <= 60) $out[] = trim($o);
+    }
+    return $out;
+}
 function tipoCategoria($cat) {
     $n = normalizarNombre($cat['name'] ?? '');
     $familias = ['salchipapas', 'burguer', 'burger', 'hamburguesas', 'perros', 'colitas'];
     return [
         'esAdicion' => (is_array($cat) && array_key_exists('esAdicion', $cat) && $cat['esAdicion'] !== null) ? !empty($cat['esAdicion']) : $n === 'adiciones',
         'personalizable' => (is_array($cat) && array_key_exists('personalizable', $cat) && $cat['personalizable'] !== null) ? !empty($cat['personalizable']) : in_array($n, $familias, true),
+        'salsas' => (is_array($cat) && array_key_exists('salsas', $cat) && $cat['salsas'] !== null) ? !empty($cat['salsas']) : $n === 'salchipapas',
     ];
 }
 
@@ -229,10 +251,25 @@ $res = dataMutar(function (&$data) use ($cargoEnvio, $envioDatos, $lineas, $day,
         }
     }
 
+    $opcionesSalsas = opcionesSalsas($data);
     $resueltos = [];
     $total = 0;
     foreach ($lineas as $l) {
         $dish = $dishesById[$l['dishId']];
+        $salsasLinea = [];
+        if ($l['salsas']) {
+            if (!tipoCategoria($categoriesById[$dish['categoryId']] ?? null)['salsas']) {
+                return ['err' => [400, '"' . $dish['name'] . '" no lleva salsas para elegir']];
+            }
+            foreach ($l['salsas'] as $sa) {
+                $hallada = null;
+                foreach ($opcionesSalsas as $op) {
+                    if (normalizarNombre($op) === normalizarNombre($sa)) { $hallada = $op; break; }
+                }
+                if ($hallada === null) return ['err' => [400, 'La salsa "' . mb_substr($sa, 0, 40) . '" no está disponible']];
+                if (!in_array($hallada, $salsasLinea, true)) $salsasLinea[] = $hallada;
+            }
+        }
         $adic = [];
         if ($l['adiciones']) {
             if (!tipoCategoria($categoriesById[$dish['categoryId']] ?? null)['personalizable']) {
@@ -257,6 +294,7 @@ $res = dataMutar(function (&$data) use ($cargoEnvio, $envioDatos, $lineas, $day,
             'cantidad' => $l['cantidad'],
             'precioUnitario' => $precioUnitario,
             'adiciones' => $adic,
+            'salsas' => $salsasLinea,
         ];
     }
 
@@ -289,6 +327,7 @@ $res = dataMutar(function (&$data) use ($cargoEnvio, $envioDatos, $lineas, $day,
         'items' => array_map(function ($r) {
             $it = ['dishId' => $r['dishId'], 'name' => $r['name'], 'cantidad' => $r['cantidad'], 'precioUnitario' => $r['precioUnitario']];
             if ($r['adiciones']) $it['adiciones'] = $r['adiciones'];
+            if ($r['salsas']) $it['salsas'] = $r['salsas'];
             return $it;
         }, $resueltos),
         'cargoDomicilio' => $cargoDomicilio,
@@ -333,7 +372,8 @@ if ($resendKey && $ownerEmail) {
     $itemsHtml = '';
     foreach ($order['items'] as $it) {
         $extras = !empty($it['adiciones']) ? ' (' . implode(' ', array_map(fn($a) => '+ ' . $esc($a['name']), $it['adiciones'])) . ')' : '';
-        $itemsHtml .= $it['cantidad'] . ' x ' . $esc($it['name']) . $extras . ' - $' . number_format($it['precioUnitario'] * $it['cantidad'], 0, ',', '.') . '<br>';
+        $salsasTxt = !empty($it['salsas']) ? ' [Salsas: ' . implode(', ', array_map($esc, $it['salsas'])) . ']' : '';
+        $itemsHtml .= $it['cantidad'] . ' x ' . $esc($it['name']) . $extras . $salsasTxt . ' - $' . number_format($it['precioUnitario'] * $it['cantidad'], 0, ',', '.') . '<br>';
     }
     $tipoEntregaLabel = ['domicilio' => 'A domicilio', 'recoger' => 'Para recoger', 'comer_aqui' => 'Comer aquí'][$tipoEntrega] ?? $tipoEntrega;
     $html = "<h2>Nuevo pedido #{$orderId}</h2>" .
