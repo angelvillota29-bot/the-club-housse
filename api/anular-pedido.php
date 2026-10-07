@@ -63,6 +63,9 @@ $res = dataMutar(function (&$d) use ($id, $por, $ahora, $hoy, $ayer) {
         'cliente' => $pedido['cliente']['nombre'] ?? '',
         'metodoPago' => $pedido['metodoPago'] ?? '',
         'pagoConfirmado' => $pedido['pagoConfirmado'] ?? null,
+        'consecutivo' => $pedido['consecutivo'] ?? null,
+        // Los archivos de los comprobantes NO se borran nunca: aquí queda la referencia.
+        'comprobantes' => $pedido['comprobantes'] ?? [],
         'eliminadoAt' => $ahora,
         'eliminadoPor' => $por,
     ];

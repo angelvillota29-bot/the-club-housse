@@ -8,7 +8,9 @@ import { formatCurrency, nombreDiaHoy, parseCurrencyNumber } from '../lib/format
 import CartPanel from '../components/CartPanel';
 import CheckoutModal from '../components/CheckoutModal';
 import NequiPago from '../components/NequiPago';
+import ComprobanteSubida from '../components/ComprobanteSubida';
 import { placeOrder } from '../lib/api';
+import { numeroRecibo, guardarPendiente, leerPendiente, borrarPendiente, PAGO_LABEL } from '../lib/pago';
 
 const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
@@ -20,6 +22,9 @@ export default function Menu() {
   const [day, setDay] = useState(nombreDiaHoy());
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [confirmedOrder, setConfirmedOrder] = useState(null);
+  // Pedido por Nequi/Daviplata al que le falta adjuntar el comprobante (se recuerda 3 días en este navegador).
+  const [pendiente, setPendiente] = useState(() => leerPendiente());
+  const [adjuntandoPendiente, setAdjuntandoPendiente] = useState(false);
 
   const esUnico = state.menuMode === 'unico';
   const esHoy = esUnico || day === nombreDiaHoy();
@@ -65,6 +70,10 @@ export default function Menu() {
     if (result.success) {
       setCheckoutOpen(false);
       setConfirmedOrder({ ...result, metodoPago });
+      if (result.comprobanteToken) {
+        guardarPendiente({ orderId: result.orderId, token: result.comprobanteToken, consecutivo: result.consecutivo, metodoPago });
+        setPendiente(leerPendiente());
+      }
       cartState.clearCart();
       await refresh();
     }
@@ -77,6 +86,19 @@ export default function Menu() {
         Menú de Hoy
       </h1>
       <p style={{ fontSize: 13, color: '#a68f78', marginTop: 4 }}>{state.brandingConfig?.name || 'The Club Housse'}</p>
+
+      {pendiente && !confirmedOrder && (
+        <div style={{ marginTop: 12, background: '#fff8ee', border: '1.5px dashed var(--brand-card-border)', padding: '10px 14px', borderRadius: 10, fontSize: 13, color: '#5c4a3a' }}>
+          <strong>Tu pedido {pendiente.consecutivo ? `N.º ${numeroRecibo(pendiente.consecutivo)}` : ''}</strong> por {PAGO_LABEL[pendiente.metodoPago] || 'Nequi'} todavía no tiene comprobante de pago.{' '}
+          {adjuntandoPendiente ? (
+            <ComprobanteSubida orderId={pendiente.orderId} token={pendiente.token} onGuardado={() => { borrarPendiente(); setPendiente(null); setAdjuntandoPendiente(false); }} />
+          ) : (
+            <button type="button" onClick={() => setAdjuntandoPendiente(true)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--brand-orange)', textDecoration: 'underline', cursor: 'pointer', fontSize: 13 }}>
+              Adjuntarlo ahora
+            </button>
+          )}
+        </div>
+      )}
 
       {!open && (
         <div style={{ marginTop: 12, background: '#fdeceb', color: 'var(--brand-danger)', padding: '10px 14px', borderRadius: 10, fontSize: 13, fontWeight: 600 }}>
@@ -167,9 +189,16 @@ export default function Menu() {
           <div style={{ ...cardStyle, borderColor: '#25d366' }}>
             <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: '#1a7a3d', fontSize: 22, marginTop: 0 }}>¡Pedido recibido!</h3>
             <p style={{ fontSize: 14, color: '#5c4a3a' }}>
-              Tu pedido #{confirmedOrder.orderId} por {formatCurrency(confirmedOrder.total)} fue recibido.
+              Tu pedido {confirmedOrder.consecutivo ? `N.º ${numeroRecibo(confirmedOrder.consecutivo)}` : `#${confirmedOrder.orderId}`} por {formatCurrency(confirmedOrder.total)} fue recibido.
             </p>
-            {confirmedOrder.metodoPago === 'nequi' && <NequiPago total={confirmedOrder.total} />}
+            {(confirmedOrder.metodoPago === 'nequi' || confirmedOrder.metodoPago === 'daviplata') && (
+              <>
+                <NequiPago total={confirmedOrder.total} metodo={confirmedOrder.metodoPago} />
+                {confirmedOrder.comprobanteToken && (
+                  <ComprobanteSubida orderId={confirmedOrder.orderId} token={confirmedOrder.comprobanteToken} onGuardado={() => setPendiente(null)} />
+                )}
+              </>
+            )}
             <button className="btn-pill btn-orange" onClick={() => setConfirmedOrder(null)}>
               Listo
             </button>

@@ -77,7 +77,7 @@ if ($cambio) {
 }
 
 if (!$isAdmin) {
-    unset($data['usersData'], $data['n8nConfig'], $data['ordersData'], $data['notifyConfig'], $data['historialPedidos'], $data['meseroAuth'], $data['pedidosEliminados'], $data['ultimoReinicio']);
+    unset($data['usersData'], $data['n8nConfig'], $data['ordersData'], $data['notifyConfig'], $data['historialPedidos'], $data['meseroAuth'], $data['pedidosEliminados'], $data['ultimoReinicio'], $data['contadorPedidos']);
 } elseif (!$isSuperAdmin) {
     // Un admin normal tampoco necesita la lista de administradores, la cola de
     // pedidos ni el historial (con nombres, direcciones y teléfonos de clientes).

@@ -70,11 +70,11 @@ export default function Orders() {
       {orders.map((o) => (
         <div key={o.id} style={{ padding: '12px 0', borderBottom: '1px dashed #eadfce' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-            <strong style={{ color: 'var(--brand-text-dark)' }}>#{o.id} — {o.cliente?.nombre}</strong>
+            <strong style={{ color: 'var(--brand-text-dark)' }}>{o.consecutivo ? `N.º ${String(o.consecutivo).padStart(4, '0')}` : `#${o.id}`} — {o.cliente?.nombre}</strong>
             <span style={{ color: 'var(--brand-orange)' }}>{formatCurrency(o.total)}</span>
           </div>
           <div style={{ fontSize: 12, color: '#8a7a6a', marginTop: 2 }}>
-            {o.tipoEntrega} · {o.metodoPago} · {CANAL_LABEL[o.canal] || o.canal}
+            {o.tipoEntrega} · {{ efectivo: 'Efectivo', nequi: 'Nequi', daviplata: 'Daviplata' }[o.metodoPago] || o.metodoPago}{o.comprobantes?.length ? ' (con comprobante)' : ''} · {CANAL_LABEL[o.canal] || o.canal}
             {o.cliente?.direccion ? ` · ${o.cliente.direccion}` : ''} · {o.cliente?.telefono}
           </div>
           <div style={{ fontSize: 12, color: '#8a7a6a', marginTop: 4 }}>

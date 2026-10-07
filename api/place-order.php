@@ -8,6 +8,7 @@ require_once __DIR__ . '/_auth.php';
 require_once __DIR__ . '/_ratelimit.php';
 require_once __DIR__ . '/_envio.php';
 require_once __DIR__ . '/_menu.php';
+require_once __DIR__ . '/_comprobante.php';
 
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -56,7 +57,9 @@ $items = is_array($input['items'] ?? null) ? $input['items'] : [];
 // 'pagina' = checkout directo del carrito; 'chat_web' = el bot desde el
 // widget del propio sitio; 'whatsapp'/'telegram' = el bot por esos canales.
 $canal = in_array($input['canal'] ?? '', ['pagina', 'chat_web', 'whatsapp', 'telegram'], true) ? $input['canal'] : 'pagina';
-$metodoPago = ($input['metodoPago'] ?? '') === 'nequi' ? 'nequi' : 'efectivo';
+// 'efectivo' · 'nequi' (QR/número de Nequi) · 'daviplata' (el mismo número pero por
+// Daviplata): quedan separados para que la caja sepa a dónde llegó cada pago.
+$metodoPago = in_array($input['metodoPago'] ?? '', ['efectivo', 'nequi', 'daviplata'], true) ? $input['metodoPago'] : 'efectivo';
 // 'domicilio' (empaque + domicilio, pide dirección) · 'recoger' (solo
 // empaque, sin dirección) · 'comer_aqui' (sin cargo, sin dirección).
 $tipoEntrega = in_array($input['tipoEntrega'] ?? '', ['domicilio', 'recoger', 'comer_aqui'], true) ? $input['tipoEntrega'] : 'domicilio';
@@ -292,8 +295,13 @@ $res = dataMutar(function (&$data) use ($cargoEnvio, $envioDatos, $lineas, $day,
 
     if (!isset($data['ordersData']) || !is_array($data['ordersData'])) $data['ordersData'] = [];
     if (!isset($data['historialPedidos']) || !is_array($data['historialPedidos'])) $data['historialPedidos'] = [];
+    // Consecutivo del recibo: 1, 2, 3... Se asigna aquí adentro, con el candado
+    // tomado, así dos pedidos simultáneos nunca comparten número. Solo el
+    // reinicio total (reset-datos.php) lo vuelve a 0.
+    $data['contadorPedidos'] = (int) ($data['contadorPedidos'] ?? 0) + 1;
     $order = [
         'id' => $orderId,
+        'consecutivo' => $data['contadorPedidos'],
         'createdAt' => $orderId,
         'day' => $menuMode === 'unico' ? 'Menú único' : $day,
         'tipoEntrega' => $tipoEntrega,
@@ -350,13 +358,15 @@ if ($resendKey && $ownerEmail) {
         $itemsHtml .= $it['cantidad'] . ' x ' . $esc($it['name']) . $extras . $salsasTxt . ' - $' . number_format($it['precioUnitario'] * $it['cantidad'], 0, ',', '.') . '<br>';
     }
     $tipoEntregaLabel = ['domicilio' => 'A domicilio', 'recoger' => 'Para recoger', 'comer_aqui' => 'Comer aquí'][$tipoEntrega] ?? $tipoEntrega;
-    $html = "<h2>Nuevo pedido #{$orderId}</h2>" .
+    $numeroRecibo = str_pad((string) ($order['consecutivo'] ?? 0), 4, '0', STR_PAD_LEFT);
+    $html = "<h2>Nuevo pedido N.º {$numeroRecibo}</h2>" .
         '<p><b>Cliente:</b> ' . $esc($nombre) .
         ($telefono !== '' ? '<br><b>Teléfono:</b> ' . $esc($telefono) : '') .
         ($direccion !== '' ? '<br><b>Dirección:</b> ' . $esc($direccion) : '') .
         ($nota !== '' ? '<br><b>Nota:</b> ' . $esc($nota) : '') . '</p>' .
         "<p><b>Entrega:</b> {$tipoEntregaLabel}</p>" .
         "<p><b>Pedido:</b><br>{$itemsHtml}</p>" .
+        '<p><b>Pago:</b> ' . (['efectivo' => 'Efectivo', 'nequi' => 'Nequi', 'daviplata' => 'Daviplata'][$order['metodoPago']] ?? $order['metodoPago']) . '</p>' .
         '<p><b>Total: $' . number_format($total, 0, ',', '.') . '</b></p>';
     $ch = curl_init('https://api.resend.com/emails');
     curl_setopt($ch, CURLOPT_POST, true);
@@ -365,7 +375,7 @@ if ($resendKey && $ownerEmail) {
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
         'from' => 'Pedidos <onboarding@resend.dev>',
         'to' => [$ownerEmail],
-        'subject' => "Nuevo pedido #{$orderId} - " . preg_replace('/[\r\n]+/', ' ', $nombre),
+        'subject' => "Nuevo pedido N.º {$numeroRecibo} - " . preg_replace('/[\r\n]+/', ' ', $nombre),
         'html' => $html,
     ]));
     curl_setopt($ch, CURLOPT_TIMEOUT, 8);
@@ -373,4 +383,7 @@ if ($resendKey && $ownerEmail) {
     curl_close($ch);
 }
 
-echo json_encode(['success' => true, 'orderId' => $orderId, 'total' => $total]);
+$respuesta = ['success' => true, 'orderId' => $orderId, 'consecutivo' => $order['consecutivo'] ?? null, 'total' => $total];
+// Quien paga por Nequi o Daviplata recibe la firma para adjuntar su comprobante.
+if (in_array($order['metodoPago'], ['nequi', 'daviplata'], true)) $respuesta['comprobanteToken'] = comprobanteToken($orderId);
+echo json_encode($respuesta);

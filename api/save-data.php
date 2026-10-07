@@ -33,7 +33,7 @@ if (!is_array($input) || !isset($input['dishes']) || !is_array($input['dishes'])
 //    (cola de pedidos). Esas pestañas están ocultas para un admin normal, pero
 //    antes solo se ocultaban en la pantalla; ahora el servidor también lo exige.
 $res = dataMutar(function (&$actual) use ($input, $esSuper) {
-    $fijos = ['meseroAuth', 'historialPedidos', 'pedidosEliminados', 'ultimoReinicio'];
+    $fijos = ['meseroAuth', 'historialPedidos', 'pedidosEliminados', 'ultimoReinicio', 'contadorPedidos'];
     if (!$esSuper) $fijos = array_merge($fijos, ['n8nConfig', 'notifyConfig', 'usersData', 'ordersData']);
     foreach ($fijos as $k) {
         if (array_key_exists($k, $actual)) $input[$k] = $actual[$k];

@@ -6,6 +6,8 @@
 // Borra: la cola de pedidos, el historial de ventas, el registro de pedidos
 // eliminados, los contadores anti-spam, la caché de direcciones y vuelve el
 // stock de cada platillo a su valor diario.
+// Reinicia el consecutivo de los recibos (vuelve a 1). Los comprobantes de pago
+// NO se borran: la carpeta data/comprobantes se mueve a un respaldo.
 // NO borra: menú, categorías, horarios, usuarios, mesero, configuraciones,
 // credenciales ni la conexión con Google.
 // Antes de borrar guarda una copia completa en data/respaldo-reinicio-*.json
@@ -67,6 +69,14 @@ $res = dataMutar(function (&$d) use ($por, $dirData) {
             }
             unset($fila);
         }
+    }
+    // El consecutivo de los recibos vuelve a empezar en 1.
+    $d['contadorPedidos'] = 0;
+    // Los comprobantes de pago no se borran: la carpeta se mueve a un respaldo.
+    $dirComp = $dirData . '/comprobantes';
+    if (is_dir($dirComp)) {
+        $resumen['comprobantesGuardados'] = count(glob($dirComp . '/*') ?: []);
+        @rename($dirComp, $dirData . '/comprobantes-respaldo-' . date('Ymd-His'));
     }
     $d['ultimoReinicio'] = ['at' => (int) round(microtime(true) * 1000), 'por' => $por];
     return $resumen;

@@ -147,11 +147,12 @@ export default function CheckoutModal({ totalsForEntrega, onClose, onSubmit, ini
             Método de pago
             <select value={metodoPago} onChange={(e) => setMetodoPago(e.target.value)} style={inputStyle}>
               <option value="efectivo">Efectivo</option>
-              <option value="nequi">Nequi / Daviplata</option>
+              <option value="nequi">Nequi</option>
+              <option value="daviplata">Daviplata</option>
             </select>
           </label>
 
-          {metodoPago === 'nequi' && <NequiPago total={totals.total} />}
+          {(metodoPago === 'nequi' || metodoPago === 'daviplata') && <NequiPago total={totals.total} metodo={metodoPago} />}
 
           <div style={totalsBox}>
             <div style={totalsRow}><span>Subtotal</span><span>{formatCurrency(totals.subtotal)}</span></div>

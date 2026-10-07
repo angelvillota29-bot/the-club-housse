@@ -5,7 +5,8 @@ import { formatCurrency } from '../lib/format';
 const NUMERO = '3187527225';
 const NUMERO_BONITO = '318 752 7225';
 
-export default function NequiPago({ total }) {
+export default function NequiPago({ total, metodo = 'nequi' }) {
+  const esDaviplata = metodo === 'daviplata';
   const [copiado, setCopiado] = useState(false);
 
   const copiar = async () => {
@@ -20,7 +21,7 @@ export default function NequiPago({ total }) {
 
   return (
     <div style={caja}>
-      <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 15, color: 'var(--brand-text-dark)' }}>Paga con Nequi o Daviplata</div>
+      <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 15, color: 'var(--brand-text-dark)' }}>{esDaviplata ? 'Paga con Daviplata' : 'Paga con Nequi'}</div>
       <p style={{ fontSize: 13, color: '#5c4a3a', margin: '6px 0' }}>
         {total ? <>Envía <strong>{formatCurrency(total)}</strong> al número</> : 'Envía el pago al número'}
       </p>
@@ -30,9 +31,15 @@ export default function NequiPago({ total }) {
           {copiado ? '✓ Copiado' : 'Copiar'}
         </button>
       </div>
-      <p style={{ fontSize: 12, color: '#6b5a4d', margin: '10px 0 6px' }}>O escanea el código QR:</p>
-      <img src="/nequi-qr.webp" alt="Código QR para pagar con Nequi — Club Housse" style={{ width: '100%', maxWidth: 230, borderRadius: 10, display: 'block', margin: '0 auto' }} />
-      <p style={{ fontSize: 11, color: '#a68f78', margin: '8px 0 0' }}>Cuando pagues, avísanos con el comprobante para confirmar tu pedido.</p>
+      {esDaviplata ? (
+        <p style={{ fontSize: 12, color: '#6b5a4d', margin: '10px 0 0' }}>Abre tu app de Daviplata y envía el pago a este número.</p>
+      ) : (
+        <>
+          <p style={{ fontSize: 12, color: '#6b5a4d', margin: '10px 0 6px' }}>O escanea el código QR:</p>
+          <img src="/nequi-qr.webp" alt="Código QR para pagar con Nequi — Club Housse" style={{ width: '100%', maxWidth: 230, borderRadius: 10, display: 'block', margin: '0 auto' }} />
+        </>
+      )}
+      <p style={{ fontSize: 11, color: '#a68f78', margin: '8px 0 0' }}>Cuando pagues, adjunta el comprobante para confirmar tu pedido.</p>
     </div>
   );
 }

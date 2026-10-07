@@ -40,6 +40,20 @@ export async function placeOrder(payload) {
   return res.json();
 }
 
+// Adjunta la foto del comprobante de pago a un pedido por Nequi/Daviplata.
+export async function subirComprobante(orderId, token, foto) {
+  const f = new FormData();
+  f.append('orderId', String(orderId));
+  f.append('token', token);
+  f.append('comprobante', foto, 'comprobante.jpg');
+  const res = await fetch('api/subir-comprobante.php', { method: 'POST', body: f });
+  try {
+    return await res.json();
+  } catch {
+    return { success: false, error: 'No se pudo guardar la foto. Intenta de nuevo.' };
+  }
+}
+
 export async function getConfigStatus() {
   const res = await fetch('api/config-status.php');
   return res.json();
