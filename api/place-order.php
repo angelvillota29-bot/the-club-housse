@@ -32,7 +32,11 @@ function campoTexto($v, $max) {
 
 if (!is_file(dataPath())) respuestaError(404, 'No hay datos');
 
-$raw = file_get_contents('php://input');
+// El pedido llega como JSON, o como formulario con el pedido en el campo "payload"
+// y la foto del comprobante de pago en "comprobante" (obligatoria si paga por
+// Nequi o Daviplata desde la página).
+$esFormulario = stripos($_SERVER['CONTENT_TYPE'] ?? '', 'multipart/form-data') === 0;
+$raw = $esFormulario ? (string) ($_POST['payload'] ?? '') : file_get_contents('php://input');
 if (strlen($raw) > 30000) respuestaError(413, 'El pedido es demasiado grande');
 $input = json_decode($raw, true);
 if (!is_array($input) || !$input) respuestaError(400, 'Datos inválidos');
@@ -63,6 +67,20 @@ $metodoPago = in_array($input['metodoPago'] ?? '', ['efectivo', 'nequi', 'davipl
 // 'domicilio' (empaque + domicilio, pide dirección) · 'recoger' (solo
 // empaque, sin dirección) · 'comer_aqui' (sin cargo, sin dirección).
 $tipoEntrega = in_array($input['tipoEntrega'] ?? '', ['domicilio', 'recoger', 'comer_aqui'], true) ? $input['tipoEntrega'] : 'domicilio';
+
+// Ningún pedido por Nequi o Daviplata hecho desde la página se acepta sin la
+// foto de su comprobante. Se revisa ANTES de tocar el stock o los datos.
+$fotoComprobante = null;
+if (in_array($metodoPago, ['nequi', 'daviplata'], true) && $canal === 'pagina') {
+    $f = $_FILES['comprobante'] ?? null;
+    if (!is_array($f) || ($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || ($f['size'] ?? 0) <= 0) {
+        respuestaError(400, 'Adjunta la foto del comprobante de pago para enviar tu pedido por Nequi o Daviplata.');
+    }
+    if ($f['size'] > COMPROBANTE_MAX_BYTES) respuestaError(413, 'La foto del comprobante es demasiado pesada (máximo 3 MB).');
+    $tipoFoto = comprobanteExtension($f['tmp_name']);
+    if ($tipoFoto === null) respuestaError(400, 'El comprobante debe ser una foto JPG, PNG o WebP.');
+    $fotoComprobante = ['tmp' => $f['tmp_name'], 'ext' => $tipoFoto[0], 'mime' => $tipoFoto[1], 'bytes' => (int) $f['size']];
+}
 
 $nombre = campoTexto($cliente['nombre'] ?? '', 80);
 $direccion = $tipoEntrega === 'domicilio' ? campoTexto($cliente['direccion'] ?? '', 200) : '';
@@ -170,7 +188,7 @@ $orderId = (int) round(microtime(true) * 1000);
 
 // Todo lo que lee y cambia el almacén de datos ocurre con el candado tomado:
 // dos pedidos simultáneos ya no se pisan ni descuentan el mismo stock dos veces.
-$res = dataMutar(function (&$data) use ($cargoEnvio, $envioDatos, $lineas, $day, $nombre, $direccion, $telefono, $nota, $tipoEntrega, $canal, $metodoPago, $accountEmail, $hoy, $hoyFecha, $orderId) {
+$res = dataMutar(function (&$data) use ($fotoComprobante, $cargoEnvio, $envioDatos, $lineas, $day, $nombre, $direccion, $telefono, $nota, $tipoEntrega, $canal, $metodoPago, $accountEmail, $hoy, $hoyFecha, $orderId) {
     // El modo de menú sale de lo guardado en el servidor, no de lo que diga el
     // navegador (antes se podía pedir "modo único" para saltarse el día).
     $menuMode = ($data['menuMode'] ?? 'semanal') === 'unico' ? 'unico' : 'semanal';
@@ -323,6 +341,16 @@ $res = dataMutar(function (&$data) use ($cargoEnvio, $envioDatos, $lineas, $day,
         'pagoConfirmado' => false,
     ];
     if ($envioDatos) $order['envio'] = $envioDatos;
+    // Guarda la foto del comprobante junto con el pedido; si no se puede guardar,
+    // el pedido NO se acepta (sale con error antes de escribir nada).
+    if ($fotoComprobante) {
+        $dirComp = comprobanteDir();
+        if (!is_dir($dirComp) && !@mkdir($dirComp, 0775, true)) return ['err' => [500, 'No se pudo guardar el comprobante, intenta de nuevo']];
+        $destino = comprobanteRuta($orderId, 0, $fotoComprobante['ext']);
+        if (!@move_uploaded_file($fotoComprobante['tmp'], $destino)) return ['err' => [500, 'No se pudo guardar el comprobante, intenta de nuevo']];
+        @chmod($destino, 0664);
+        $order['comprobantes'] = [['n' => 0, 'mime' => $fotoComprobante['mime'], 'bytes' => $fotoComprobante['bytes'], 'at' => $orderId, 'por' => 'cliente']];
+    }
     $data['ordersData'][] = $order;
     // Registro PERMANENTE: a diferencia de ordersData (la cola de cocina, que se
     // vacía al eliminar el ticket), este nunca se borra desde el Receptor de
@@ -383,7 +411,4 @@ if ($resendKey && $ownerEmail) {
     curl_close($ch);
 }
 
-$respuesta = ['success' => true, 'orderId' => $orderId, 'consecutivo' => $order['consecutivo'] ?? null, 'total' => $total];
-// Quien paga por Nequi o Daviplata recibe la firma para adjuntar su comprobante.
-if (in_array($order['metodoPago'], ['nequi', 'daviplata'], true)) $respuesta['comprobanteToken'] = comprobanteToken($orderId);
-echo json_encode($respuesta);
+echo json_encode(['success' => true, 'orderId' => $orderId, 'consecutivo' => $order['consecutivo'] ?? null, 'total' => $total]);

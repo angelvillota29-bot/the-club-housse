@@ -32,33 +32,3 @@ export async function prepararFoto(file) {
   if (file.size <= LIMITE_BYTES && /^image\/(jpeg|png|webp)$/.test(file.type)) return file;
   throw new Error('No se pudo preparar la foto. Prueba con una captura de pantalla.');
 }
-
-// Pedido por Nequi/Daviplata que todavía no tiene comprobante: se recuerda en
-// este navegador 3 días para que el cliente pueda adjuntarlo después de pagar.
-const CLAVE_PENDIENTE = 'housse_comprobante_pendiente';
-
-export function guardarPendiente(datos) {
-  try {
-    localStorage.setItem(CLAVE_PENDIENTE, JSON.stringify({ ...datos, at: Date.now() }));
-  } catch {
-    // sin almacenamiento: el cliente igual puede adjuntar en el momento
-  }
-}
-
-export function leerPendiente() {
-  try {
-    const p = JSON.parse(localStorage.getItem(CLAVE_PENDIENTE) || 'null');
-    if (!p || !p.orderId || !p.token || Date.now() - (p.at || 0) > 3 * 86400000) return null;
-    return p;
-  } catch {
-    return null;
-  }
-}
-
-export function borrarPendiente() {
-  try {
-    localStorage.removeItem(CLAVE_PENDIENTE);
-  } catch {
-    // nada
-  }
-}

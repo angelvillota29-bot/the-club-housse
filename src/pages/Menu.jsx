@@ -8,9 +8,8 @@ import { formatCurrency, nombreDiaHoy, parseCurrencyNumber } from '../lib/format
 import CartPanel from '../components/CartPanel';
 import CheckoutModal from '../components/CheckoutModal';
 import NequiPago from '../components/NequiPago';
-import ComprobanteSubida from '../components/ComprobanteSubida';
 import { placeOrder } from '../lib/api';
-import { numeroRecibo, guardarPendiente, leerPendiente, borrarPendiente, PAGO_LABEL } from '../lib/pago';
+import { numeroRecibo } from '../lib/pago';
 
 const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
@@ -22,9 +21,6 @@ export default function Menu() {
   const [day, setDay] = useState(nombreDiaHoy());
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [confirmedOrder, setConfirmedOrder] = useState(null);
-  // Pedido por Nequi/Daviplata al que le falta adjuntar el comprobante (se recuerda 3 días en este navegador).
-  const [pendiente, setPendiente] = useState(() => leerPendiente());
-  const [adjuntandoPendiente, setAdjuntandoPendiente] = useState(false);
 
   const esUnico = state.menuMode === 'unico';
   const esHoy = esUnico || day === nombreDiaHoy();
@@ -54,7 +50,7 @@ export default function Menu() {
     [groups],
   );
 
-  const submitOrder = async ({ nombre, direccion, telefono, nota, tipoEntrega, metodoPago, envioToken }) => {
+  const submitOrder = async ({ nombre, direccion, telefono, nota, tipoEntrega, metodoPago, envioToken, foto }) => {
     const payload = {
       day: esUnico ? undefined : day,
       tipoEntrega,
@@ -66,14 +62,10 @@ export default function Menu() {
       items: cartState.cart.map((i) => ({ dishId: i.dishId, cantidad: i.cantidad, adiciones: (i.adiciones || []).map((a) => a.dishId), salsas: i.permiteSalsas ? i.salsas || [] : undefined })),
       accountEmail: user || undefined,
     };
-    const result = await placeOrder(payload);
+    const result = await placeOrder(payload, foto);
     if (result.success) {
       setCheckoutOpen(false);
       setConfirmedOrder({ ...result, metodoPago });
-      if (result.comprobanteToken) {
-        guardarPendiente({ orderId: result.orderId, token: result.comprobanteToken, consecutivo: result.consecutivo, metodoPago });
-        setPendiente(leerPendiente());
-      }
       cartState.clearCart();
       await refresh();
     }
@@ -86,19 +78,6 @@ export default function Menu() {
         Menú de Hoy
       </h1>
       <p style={{ fontSize: 13, color: '#a68f78', marginTop: 4 }}>{state.brandingConfig?.name || 'The Club Housse'}</p>
-
-      {pendiente && !confirmedOrder && (
-        <div style={{ marginTop: 12, background: '#fff8ee', border: '1.5px dashed var(--brand-card-border)', padding: '10px 14px', borderRadius: 10, fontSize: 13, color: '#5c4a3a' }}>
-          <strong>Tu pedido {pendiente.consecutivo ? `N.º ${numeroRecibo(pendiente.consecutivo)}` : ''}</strong> por {PAGO_LABEL[pendiente.metodoPago] || 'Nequi'} todavía no tiene comprobante de pago.{' '}
-          {adjuntandoPendiente ? (
-            <ComprobanteSubida orderId={pendiente.orderId} token={pendiente.token} onGuardado={() => { borrarPendiente(); setPendiente(null); setAdjuntandoPendiente(false); }} />
-          ) : (
-            <button type="button" onClick={() => setAdjuntandoPendiente(true)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--brand-orange)', textDecoration: 'underline', cursor: 'pointer', fontSize: 13 }}>
-              Adjuntarlo ahora
-            </button>
-          )}
-        </div>
-      )}
 
       {!open && (
         <div style={{ marginTop: 12, background: '#fdeceb', color: 'var(--brand-danger)', padding: '10px 14px', borderRadius: 10, fontSize: 13, fontWeight: 600 }}>
@@ -192,12 +171,7 @@ export default function Menu() {
               Tu pedido {confirmedOrder.consecutivo ? `N.º ${numeroRecibo(confirmedOrder.consecutivo)}` : `#${confirmedOrder.orderId}`} por {formatCurrency(confirmedOrder.total)} fue recibido.
             </p>
             {(confirmedOrder.metodoPago === 'nequi' || confirmedOrder.metodoPago === 'daviplata') && (
-              <>
-                <NequiPago total={confirmedOrder.total} metodo={confirmedOrder.metodoPago} />
-                {confirmedOrder.comprobanteToken && (
-                  <ComprobanteSubida orderId={confirmedOrder.orderId} token={confirmedOrder.comprobanteToken} onGuardado={() => setPendiente(null)} />
-                )}
-              </>
+              <p style={{ fontSize: 13, color: '#1a7a3d', margin: '0 0 10px' }}>✓ Recibimos tu comprobante de pago. El restaurante lo revisará para confirmar tu pedido.</p>
             )}
             <button className="btn-pill btn-orange" onClick={() => setConfirmedOrder(null)}>
               Listo

@@ -31,26 +31,23 @@ export async function calcularEnvio(direccion) {
   return res.json();
 }
 
-export async function placeOrder(payload) {
-  const res = await fetch('api/place-order.php', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  return res.json();
-}
-
-// Adjunta la foto del comprobante de pago a un pedido por Nequi/Daviplata.
-export async function subirComprobante(orderId, token, foto) {
-  const f = new FormData();
-  f.append('orderId', String(orderId));
-  f.append('token', token);
-  f.append('comprobante', foto, 'comprobante.jpg');
-  const res = await fetch('api/subir-comprobante.php', { method: 'POST', body: f });
+// Si el pedido es por Nequi/Daviplata viaja como formulario: el pedido en "payload"
+// y la foto del comprobante en "comprobante" (el servidor no lo acepta sin ella).
+export async function placeOrder(payload, foto) {
+  let init;
+  if (foto) {
+    const f = new FormData();
+    f.append('payload', JSON.stringify(payload));
+    f.append('comprobante', foto, 'comprobante.jpg');
+    init = { method: 'POST', body: f };
+  } else {
+    init = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) };
+  }
+  const res = await fetch('api/place-order.php', init);
   try {
     return await res.json();
   } catch {
-    return { success: false, error: 'No se pudo guardar la foto. Intenta de nuevo.' };
+    return { success: false, error: 'No se pudo enviar el pedido. Intenta de nuevo.' };
   }
 }
 

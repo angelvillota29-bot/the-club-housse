@@ -1,17 +1,14 @@
 <?php
-// Guarda el comprobante de pago (foto/captura) de un pedido por Nequi o
-// Daviplata. Dos formas de llamarlo:
-//  - EL CLIENTE, desde la página, justo después de hacer el pedido: manda el id
-//    del pedido y la firma ("token") que le entregó place-order.php.
-//  - EL RECEPTOR (caja), con la misma API Key de siempre, para adjuntar uno a
-//    mano (por ejemplo el que el cliente mandó por WhatsApp).
+// Agrega otro comprobante de pago (foto/captura) a un pedido por Nequi o
+// Daviplata. Solo la caja (Receptor, con la API Key de siempre): por ejemplo el
+// que el cliente mandó por WhatsApp. El comprobante de los pedidos hechos en la
+// página ya llega con el pedido (place-order.php).
 // Un comprobante guardado no se puede borrar ni reemplazar: si salió mal se
 // agrega otro (hasta 3 por pedido). Ver api/_comprobante.php.
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 require_once __DIR__ . '/_auth.php';
 require_once __DIR__ . '/_data.php';
-require_once __DIR__ . '/_ratelimit.php';
 require_once __DIR__ . '/_comprobante.php';
 
 function comprobanteFallo($codigo, $mensaje) {
@@ -38,15 +35,8 @@ $desdeCaja = $providedKey !== '' && $validKey && hash_equals($validKey, $provide
 $orderId = (string) ($_POST['orderId'] ?? '');
 if (!comprobanteIdValido($orderId)) comprobanteFallo(400, 'Falta el pedido al que pertenece el comprobante');
 
-if ($desdeCaja) {
-    $por = substr(trim((string) ($_POST['subidoPor'] ?? '')), 0, 120) ?: 'caja';
-} else {
-    // El cliente: solo desde nuestra página, con su firma y con tope por IP.
-    requirePostSameOrigin(false);
-    if (!comprobanteTokenValido($orderId, $_POST['token'] ?? '')) comprobanteFallo(403, 'No se pudo comprobar que este pedido es tuyo');
-    if (!dentroDelLimite('comprobante:' . clientIp(), 15, 3600)) comprobanteFallo(429, 'Demasiados intentos. Espera un momento e intenta de nuevo.');
-    $por = 'cliente';
-}
+if (!$desdeCaja) comprobanteFallo(401, 'No autorizado');
+$por = substr(trim((string) ($_POST['subidoPor'] ?? '')), 0, 120) ?: 'caja';
 
 $f = $_FILES['comprobante'] ?? null;
 if (!is_array($f) || ($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
@@ -62,7 +52,7 @@ $tmp = $f['tmp_name'];
 $ahora = (int) round(microtime(true) * 1000);
 $tamano = (int) $f['size'];
 
-$res = dataMutar(function (&$d) use ($orderId, $desdeCaja, $por, $ext, $mime, $tmp, $ahora, $tamano) {
+$res = dataMutar(function (&$d) use ($orderId, $por, $ext, $mime, $tmp, $ahora, $tamano) {
     $lista = isset($d['historialPedidos']) && is_array($d['historialPedidos']) ? $d['historialPedidos'] : [];
     $pedido = null;
     foreach ($lista as $h) {
@@ -71,10 +61,6 @@ $res = dataMutar(function (&$d) use ($orderId, $desdeCaja, $por, $ext, $mime, $t
     if (!$pedido) return ['err' => [404, 'Pedido no encontrado']];
     if (!in_array($pedido['metodoPago'] ?? '', ['nequi', 'daviplata'], true)) {
         return ['err' => [409, 'Este pedido no es por Nequi ni Daviplata']];
-    }
-    // El cliente tiene 3 días para adjuntar; la caja puede hacerlo cuando sea.
-    if (!$desdeCaja && $ahora - (int) ($pedido['createdAt'] ?? 0) > 3 * 86400000) {
-        return ['err' => [403, 'Ya pasó el plazo para adjuntar el comprobante desde la página. Avísanos por WhatsApp.']];
     }
     $existentes = isset($pedido['comprobantes']) && is_array($pedido['comprobantes']) ? $pedido['comprobantes'] : [];
     if (count($existentes) >= COMPROBANTE_MAX_POR_PEDIDO) {

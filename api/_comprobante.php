@@ -4,6 +4,8 @@
 // Se guardan como archivos en data/comprobantes/ (carpeta privada: el servidor
 // niega el acceso web directo) y en el pedido solo queda la lista de datos
 // ("comprobantes": n, tipo, tamaño, quién y cuándo). Reglas:
+//  - El cliente adjunta el primero al hacer el pedido (place-order.php lo exige
+//    por Nequi/Daviplata); la caja puede agregar más (subir-comprobante.php).
 //  - Un comprobante, una vez guardado, NO se puede borrar ni reemplazar desde
 //    ninguna pantalla; si la foto salió mal se agrega otra (máx. 3 por pedido).
 //  - Aunque el pedido se elimine del historial (pedido cancelado de hoy/ayer),
@@ -20,16 +22,6 @@ function comprobanteDir() {
 // El id del pedido es un número de milisegundos: nada más pasa a un nombre de archivo.
 function comprobanteIdValido($id) {
     return (is_int($id) || is_string($id)) && preg_match('/^\d{10,16}$/', (string) $id) === 1;
-}
-
-// Firma que entrega place-order.php al cliente que hizo ESE pedido, para que
-// solo él pueda adjuntar el comprobante (sin sesión ni cuenta).
-function comprobanteToken($orderId) {
-    return hash_hmac('sha256', 'comprobante|' . $orderId, sessionSecret());
-}
-
-function comprobanteTokenValido($orderId, $token) {
-    return is_string($token) && $token !== '' && hash_equals(comprobanteToken($orderId), $token);
 }
 
 // Extensión segura según el CONTENIDO real del archivo (nunca el nombre que

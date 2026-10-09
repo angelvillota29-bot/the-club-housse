@@ -3,6 +3,7 @@ import { formatCurrency } from '../lib/format';
 import { calcularEnvio, getConfigStatus } from '../lib/api';
 import TermsButton from './TermsButton';
 import NequiPago from './NequiPago';
+import { prepararFoto } from '../lib/pago';
 
 export default function CheckoutModal({ totalsForEntrega, onClose, onSubmit, initialTipoEntrega, envioActivo }) {
   const [tipoEntrega, setTipoEntrega] = useState(initialTipoEntrega || 'domicilio');
@@ -12,6 +13,9 @@ export default function CheckoutModal({ totalsForEntrega, onClose, onSubmit, ini
   const [showTerms, setShowTerms] = useState(false);
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
+  // Foto del comprobante: obligatoria si paga por Nequi o Daviplata.
+  const [foto, setFoto] = useState(null);
+  const pagaDigital = metodoPago === 'nequi' || metodoPago === 'daviplata';
 
   // Domicilio por distancia: solo aplica si está activo en el panel Y el servidor
   // tiene conectada la clave de Google. Si no, se cobra el domicilio de siempre.
@@ -78,9 +82,23 @@ export default function CheckoutModal({ totalsForEntrega, onClose, onSubmit, ini
       setError('Calcula el costo del domicilio con tu dirección antes de enviar el pedido.');
       return;
     }
+    if (pagaDigital && !foto) {
+      setError('Adjunta la foto del comprobante de pago para enviar tu pedido.');
+      return;
+    }
     setSending(true);
     setError('');
-    const result = await onSubmit({ ...form, tipoEntrega, metodoPago, envioToken: needsAddress && envioOn ? quote?.token : undefined });
+    let fotoLista = null;
+    if (pagaDigital) {
+      try {
+        fotoLista = await prepararFoto(foto);
+      } catch (err) {
+        setSending(false);
+        setError(err.message || 'No se pudo preparar la foto del comprobante.');
+        return;
+      }
+    }
+    const result = await onSubmit({ ...form, tipoEntrega, metodoPago, envioToken: needsAddress && envioOn ? quote?.token : undefined, foto: fotoLista });
     setSending(false);
     if (!result?.success) {
       setError(result?.error || 'No se pudo procesar el pedido.');
@@ -152,7 +170,15 @@ export default function CheckoutModal({ totalsForEntrega, onClose, onSubmit, ini
             </select>
           </label>
 
-          {(metodoPago === 'nequi' || metodoPago === 'daviplata') && <NequiPago total={totals.total} metodo={metodoPago} />}
+          {pagaDigital && <NequiPago total={totals.total} metodo={metodoPago} />}
+          {pagaDigital && (
+            <label style={{ ...labelStyle, background: '#fff8ee', border: '1.5px dashed var(--brand-card-border)', borderRadius: 12, padding: '10px 12px' }}>
+              <strong style={{ color: 'var(--brand-text-dark)' }}>Comprobante de pago (obligatorio)</strong>
+              <span style={{ fontSize: 12 }}>Paga y sube aquí la captura de pantalla. Sin el comprobante no se puede enviar el pedido.</span>
+              <input type="file" accept="image/*" onChange={(e) => setFoto(e.target.files?.[0] || null)} style={{ fontSize: 13 }} />
+              {foto && <span style={{ fontSize: 12, color: '#1a7a3d' }}>✓ {foto.name}</span>}
+            </label>
+          )}
 
           <div style={totalsBox}>
             <div style={totalsRow}><span>Subtotal</span><span>{formatCurrency(totals.subtotal)}</span></div>
