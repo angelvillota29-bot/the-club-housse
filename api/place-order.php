@@ -71,6 +71,10 @@ $tipoEntrega = in_array($input['tipoEntrega'] ?? '', ['domicilio', 'recoger', 'c
 // Ningún pedido por Nequi o Daviplata hecho desde la página se acepta sin la
 // foto de su comprobante. Se revisa ANTES de tocar el stock o los datos.
 $fotoComprobante = null;
+// Por el chat (bot) o cualquier otro canal NO se aceptan: sin foto no hay comprobante.
+if (in_array($metodoPago, ['nequi', 'daviplata'], true) && $canal !== 'pagina') {
+    respuestaError(400, 'Los pagos por Nequi o Daviplata solo se reciben desde la página, con el comprobante del pago.');
+}
 if (in_array($metodoPago, ['nequi', 'daviplata'], true) && $canal === 'pagina') {
     $f = $_FILES['comprobante'] ?? null;
     if (!is_array($f) || ($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || ($f['size'] ?? 0) <= 0) {
